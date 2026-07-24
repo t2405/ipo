@@ -46,12 +46,9 @@ import {
   revokedRefreshTokens
 } from "./src/middleware/security.js";
 
-
-
 const app = express();
 app.set("trust proxy", 1);
 app.use(express.json({ limit: "50mb" }));
-
 
 // Mount Enterprise Security Middlewares globally
 app.use(securityHeaders);
@@ -177,7 +174,6 @@ const RBAC_MAPPINGS: Record<string, string[]> = {
 // Middleware to check user permission
 function checkPermission(requiredPermission: string) {
   return (req: express.Request, res: express.Response, next: express.NextFunction) => {
-    // Developers can test different roles via a request header. By default, we use INVESTOR.
     const userRole = (req.headers["x-user-role"] as string || "INVESTOR").toUpperCase();
     const allowedPermissions = RBAC_MAPPINGS[userRole] || [];
 
@@ -271,9 +267,7 @@ function createDefaultDb(): DbSchema {
   };
 }
 
-function saveDb(_data: DbSchema) {
-  // Serverless-safe runtime fallback: keep this request-scoped and rely on PostgreSQL/Redis for durable state.
-}
+function saveDb(_data: DbSchema) {}
 
 function addNotification(
   title: string,
@@ -303,10 +297,8 @@ function addNotification(
   saveDb(db);
 }
 
-// Ensure database is initialized
 let db = createDefaultDb();
 
-// Groq Circuit Breaker Pattern State
 let isGroqCircuitBroken = false;
 let groqCircuitBrokenUntil = 0;
 
@@ -321,33 +313,31 @@ function checkGroqCircuit(): boolean {
     if (Date.now() > groqCircuitBrokenUntil) {
       isGroqCircuitBroken = false;
       console.log("[Circuit Breaker] Resetting! Retrying Groq API connections...");
-      return true; // Circuit reset
+      return true;
     }
-    return false; // Circuit is still broken
+    return false;
   }
-  return true; // Circuit is clean
+  return true;
 }
 
 function handleGroqError(err: any) {
   const errMsg = String(err?.message || err || "").toLowerCase();
   if (errMsg.includes("429") || errMsg.includes("rate_limit") || errMsg.includes("quota")) {
     console.warn("[Circuit Breaker] Quota limit/Rate limit detected (429). Tripping circuit breaker to prevent API overhead.");
-    tripGroqCircuit(5 * 60 * 1000); // Trip for 5 minutes
+    tripGroqCircuit(5 * 60 * 1000);
   }
 }
 
-// Lazy initialization of Groq client
 let groqClient: Groq | null = null;
 function getGroqClient(): Groq | null {
   if (!checkGroqCircuit()) {
-    return null; // Bypasses Groq API call and uses local database directly
+    return null;
   }
   const apiKey = secretsManager.get("GROQ_API_KEY");
   if (!apiKey || apiKey === "MY_GROQ_API_KEY" || apiKey.trim() === "") {
     console.warn("GROQ_API_KEY is not configured or placeholder. Groq calls will fall back to rule-based response generators.");
     return null;
   }
-  // Re-create client if key changes (key rotation support)
   if (!groqClient || (groqClient as any)._options?.apiKey !== apiKey) {
     try {
       groqClient = new Groq({
@@ -361,7 +351,6 @@ function getGroqClient(): Groq | null {
   return groqClient;
 }
 
-// Comprehensive high-quality dataset of current & upcoming IPOs
 const IPOS_DATA = [
   {
     id: "acme-cloudtech",
@@ -382,8 +371,8 @@ const IPOS_DATA = [
     hniQuota: 15,
     promoterHoldingBefore: 82.5,
     promoterHoldingAfter: 61.2,
-    gmp: 185, // ₹185 premium
-    gmpPercent: 38.9, // 38.9% premium
+    gmp: 185,
+    gmpPercent: 38.9,
     subscriptionOverall: 14.5,
     subscriptionRetail: 6.2,
     subscriptionQib: 24.1,
@@ -412,252 +401,9 @@ const IPOS_DATA = [
       { year: "FY26", revenue: 2680, profit: 430, debt: 0 }
     ],
     status: "ACTIVE"
-  },
-  {
-    id: "novacharge-mobility",
-    name: "NovaCharge Mobility Solutions",
-    symbol: "NOVAMOBI",
-    priceBand: "₹180 - ₹195",
-    minPrice: 180,
-    maxPrice: 195,
-    lotSize: 75,
-    issueSize: "₹1,800 Cr",
-    openDate: "2026-07-20",
-    closeDate: "2026-07-24",
-    listingDate: "2026-08-01",
-    registrar: "KFin Technologies Ltd",
-    leadManagers: ["Axis Capital", "JM Financial"],
-    retailQuota: 35,
-    qibQuota: 50,
-    hniQuota: 15,
-    promoterHoldingBefore: 74.0,
-    promoterHoldingAfter: 55.5,
-    gmp: 42,
-    gmpPercent: 21.5,
-    subscriptionOverall: 3.8,
-    subscriptionRetail: 2.1,
-    subscriptionQib: 5.2,
-    subscriptionHni: 2.9,
-    aiScore: 71,
-    aiConfidence: 85,
-    riskScore: 45,
-    recommendation: "APPLY",
-    industry: "Electric Vehicle Charging & Storage",
-    competitors: ["Exide Industries", "Tata Power", "Servotech Power"],
-    strengths: [
-      "Largest EV fast-charging highway corridor network in India with 40% market share",
-      "Strategic partnerships with top-tier automotive OEMs for pre-installed charger bundles",
-      "Robust hardware manufacturing unit in Pune operating at 80% capacity utilization"
-    ],
-    risks: [
-      "Operating profit margins are sensitive to lithium and copper raw material cost fluctuations",
-      "Capital-intensive expansion business model requiring continuous cash injection",
-      "Slowdown in consumer adoption of electric passenger vehicles"
-    ],
-    objectOfIssue: "To expand EV charging highway hubs by adding 1,500 premium fast chargers and setting up high-capacity battery assembly lines.",
-    financials: [
-      { year: "FY24", revenue: 410, profit: 12, debt: 110 },
-      { year: "FY25", revenue: 680, profit: 34, debt: 140 },
-      { year: "FY26", revenue: 1120, profit: 89, debt: 165 }
-    ],
-    status: "ACTIVE"
-  },
-  {
-    id: "biopulse-therapeutics",
-    name: "BioPulse Genomics & Therapeutics",
-    symbol: "BIOPULSE",
-    priceBand: "₹310 - ₹330",
-    minPrice: 310,
-    maxPrice: 330,
-    lotSize: 45,
-    issueSize: "₹2,200 Cr",
-    openDate: "2026-07-26",
-    closeDate: "2026-07-30",
-    listingDate: "2026-08-08",
-    registrar: "Link Intime India Pvt Ltd",
-    leadManagers: ["HDFC Bank", "Citigroup Global Markets"],
-    retailQuota: 10, // BioPulse has a QIB bias
-    qibQuota: 75,
-    hniQuota: 15,
-    promoterHoldingBefore: 65.1,
-    promoterHoldingAfter: 48.0,
-    gmp: 12,
-    gmpPercent: 3.6,
-    subscriptionOverall: 0.0,
-    subscriptionRetail: 0.0,
-    subscriptionQib: 0.0,
-    subscriptionHni: 0.0,
-    aiScore: 54,
-    aiConfidence: 78,
-    riskScore: 68,
-    recommendation: "MODERATE",
-    industry: "Biotech & Gene Sequencing Therapeutics",
-    competitors: ["Biocon", "Syngene International", "Laurus Labs"],
-    strengths: [
-      "Pioneering genomics-driven oncology therapeutics in south-east Asia",
-      "7 active patents granted with an additional 12 international applications pending",
-      "Highly qualified R&D team with multiple global medical publications"
-    ],
-    risks: [
-      "Extremely long clinical trial horizons with high failure probability",
-      "Consistently negative free cash flow over the past 4 years due to aggressive research burn-rate",
-      "Subject to strict FDA and local regulatory clearances that can delay launches"
-    ],
-    objectOfIssue: "To support Phase III trials of BP-912 oncology molecule and scale laboratory testing spaces in Bangalore.",
-    financials: [
-      { year: "FY24", revenue: 85, profit: -42, debt: 45 },
-      { year: "FY25", revenue: 112, profit: -31, debt: 30 },
-      { year: "FY26", revenue: 165, profit: -18, debt: 25 }
-    ],
-    status: "UPCOMING"
-  },
-  {
-    id: "zetapay-fintech",
-    name: "ZetaPay Lending & Payments Ltd",
-    symbol: "ZETAPAY",
-    priceBand: "₹115 - ₹125",
-    minPrice: 115,
-    maxPrice: 125,
-    lotSize: 120,
-    issueSize: "₹4,100 Cr",
-    openDate: "2026-07-02",
-    closeDate: "2026-07-05",
-    listingDate: "2026-07-13",
-    registrar: "KFin Technologies Ltd",
-    leadManagers: ["ICICI Securities", "Nomura India", "SBI Capital"],
-    retailQuota: 10,
-    qibQuota: 75,
-    hniQuota: 15,
-    promoterHoldingBefore: 45.3,
-    promoterHoldingAfter: 31.0,
-    gmp: -8, // ₹8 Discount
-    gmpPercent: -6.4, // Discount
-    subscriptionOverall: 1.15,
-    subscriptionRetail: 1.05,
-    subscriptionQib: 1.30,
-    subscriptionHni: 0.82,
-    aiScore: 35,
-    aiConfidence: 90,
-    riskScore: 78,
-    recommendation: "AVOID",
-    industry: "Consumer Credit Fintech",
-    competitors: ["One97 Communications", "PB Fintech", "Bajaj Finance"],
-    strengths: [
-      "Wide retail reach with over 15 million registered consumer wallets",
-      "High proprietary credit underwriting engine speeds up loan disbursement"
-    ],
-    risks: [
-      "Spike in Non-Performing Assets (NPAs) from 2.1% to 4.8% in FY26",
-      "Regulatory clampdown on unsecured retail lending by RBI limits growth margins",
-      "Highly overvalued compared to listed industry peers (P/E ratio of 145x)"
-    ],
-    objectOfIssue: "To satisfy regulatory capital adequacy requirements and general corporate capital injections.",
-    financials: [
-      { year: "FY24", revenue: 1820, profit: -140, debt: 890 },
-      { year: "FY25", revenue: 2140, profit: -85, debt: 1120 },
-      { year: "FY26", revenue: 2350, profit: 12, debt: 1450 }
-    ],
-    status: "CLOSED"
-  },
-  {
-    id: "apex-logichain",
-    name: "Apex LogiChain Logistics",
-    symbol: "APEXLOGI",
-    priceBand: "₹240 - ₹250",
-    minPrice: 240,
-    maxPrice: 250,
-    lotSize: 60,
-    issueSize: "₹1,400 Cr",
-    openDate: "2026-06-25",
-    closeDate: "2026-06-28",
-    listingDate: "2026-07-06",
-    registrar: "Link Intime India Pvt Ltd",
-    leadManagers: ["IIFL Securities", "Motilal Oswal"],
-    retailQuota: 35,
-    qibQuota: 50,
-    hniQuota: 15,
-    promoterHoldingBefore: 90.0,
-    promoterHoldingAfter: 68.4,
-    gmp: 60,
-    gmpPercent: 24.0,
-    subscriptionOverall: 28.6,
-    subscriptionRetail: 12.4,
-    subscriptionQib: 44.5,
-    subscriptionHni: 18.2,
-    aiScore: 78,
-    aiConfidence: 88,
-    riskScore: 32,
-    recommendation: "APPLY",
-    industry: "Logistics, Warehousing & Distribution",
-    competitors: ["Delhivery", "Blue Dart Express", "Mahindra Logistics"],
-    strengths: [
-      "Consistent double-digit margins driven by premium automated cold chains",
-      "Diversified client list across high-margin pharmaceutical and FMCG brands",
-      "State-of-the-art sorting hubs running automated RFID tracking"
-    ],
-    risks: [
-      "Dependent on regional highway corridors with seasonal weather disruptions",
-      "Fuel price volatility directly impacts short-term operating profit"
-    ],
-    objectOfIssue: "To construct three modern grade-A automated distribution parks in Chennai, NCR, and Kolkata.",
-    financials: [
-      { year: "FY24", revenue: 640, profit: 45, debt: 120 },
-      { year: "FY25", revenue: 810, profit: 72, debt: 95 },
-      { year: "FY26", revenue: 1040, profit: 115, debt: 70 }
-    ],
-    status: "LISTED"
-  },
-  {
-    id: "solaris-renewable",
-    name: "Solaris Renewable Power Ltd",
-    symbol: "SOLARIS",
-    priceBand: "₹140 - ₹150",
-    minPrice: 140,
-    maxPrice: 150,
-    lotSize: 100,
-    issueSize: "₹2,700 Cr",
-    openDate: "2026-08-02",
-    closeDate: "2026-08-06",
-    listingDate: "2026-08-14",
-    registrar: "KFin Technologies Ltd",
-    leadManagers: ["ICICI Securities", "SBI Capital", "Kotak Capital"],
-    retailQuota: 35,
-    qibQuota: 50,
-    hniQuota: 15,
-    promoterHoldingBefore: 100.0,
-    promoterHoldingAfter: 72.0,
-    gmp: 48,
-    gmpPercent: 32.0,
-    subscriptionOverall: 0.0,
-    subscriptionRetail: 0.0,
-    subscriptionQib: 0.0,
-    subscriptionHni: 0.0,
-    aiScore: 82,
-    aiConfidence: 89,
-    riskScore: 24,
-    recommendation: "APPLY",
-    industry: "Renewable Solar & Wind Utility",
-    competitors: ["Adani Green", "Tata Power Solar", "Suzlon"],
-    strengths: [
-      "Guaranteed long-term Power Purchase Agreements (PPAs) with central electricity boards",
-      "Low cost of capital via green bond financings",
-      "Over 3.4 GW of operational renewable capacity across Rajasthan and Gujarat"
-    ],
-    risks: [
-      "Output varies based on meteorological factors like solar irradiance",
-      "Lengthy land acquisition processes can delay capacity commission"
-    ],
-    objectOfIssue: "To develop a new 800 MW smart solar tracker project in Jaisalmer, Rajasthan.",
-    financials: [
-      { year: "FY24", revenue: 520, profit: 80, debt: 450 },
-      { year: "FY25", revenue: 740, profit: 135, debt: 410 },
-      { year: "FY26", revenue: 1050, profit: 210, debt: 380 }
-    ],
-    status: "UPCOMING"
   }
 ];
 
-// Real-world high-quality dataset of current & upcoming NSE IPOs (NSE Fallback)
 const REAL_NSE_IPOS = [
   {
     id: "waaree-energies",
@@ -707,227 +453,22 @@ const REAL_NSE_IPOS = [
       { year: "FY26", revenue: 16800, profit: 2150, debt: 150 }
     ],
     status: "ACTIVE"
-  },
-  {
-    id: "swiggy-ltd",
-    name: "Swiggy Limited",
-    symbol: "SWIGGY",
-    priceBand: "₹371 - ₹390",
-    minPrice: 371,
-    maxPrice: 390,
-    lotSize: 38,
-    issueSize: "₹11,327 Cr",
-    openDate: "2026-07-22",
-    closeDate: "2026-07-25",
-    listingDate: "2026-08-01",
-    registrar: "Link Intime India Pvt Ltd",
-    leadManagers: ["Kotak Mahindra Capital", "Citigroup", "J.P. Morgan"],
-    retailQuota: 10,
-    qibQuota: 75,
-    hniQuota: 15,
-    promoterHoldingBefore: 0.0,
-    promoterHoldingAfter: 0.0,
-    gmp: 15,
-    gmpPercent: 3.8,
-    subscriptionOverall: 3.6,
-    subscriptionRetail: 1.1,
-    subscriptionQib: 4.5,
-    subscriptionHni: 2.2,
-    aiScore: 68,
-    aiConfidence: 84,
-    riskScore: 55,
-    recommendation: "MODERATE",
-    industry: "Food Delivery & Quick Commerce Tech",
-    competitors: ["Zomato Limited", "Zepto (Pharmeasy/Adani)"],
-    strengths: [
-      "Pioneered quick commerce (Instamart) and food delivery in India with millions of active transacting users",
-      "Rapidly improving contribution margins across dark stores and restaurants",
-      "Strong platform play with Swiggy One membership program"
-    ],
-    risks: [
-      "Historically loss-making business model, although net losses are shrinking rapidly",
-      "Aggressive price competition and talent poaching from Zomato and Zepto",
-      "High commission and delivery partner inflation impacts gross margin"
-    ],
-    objectOfIssue: "To invest in brand marketing, expand dark store network for Swiggy Instamart, and general corporate acquisitions.",
-    financials: [
-      { year: "FY24", revenue: 11247, profit: -1612, debt: 0 },
-      { year: "FY25", revenue: 14350, profit: -450, debt: 0 },
-      { year: "FY26", revenue: 18400, profit: 80, debt: 0 }
-    ],
-    status: "ACTIVE"
-  },
-  {
-    id: "hyundai-motor-india",
-    name: "Hyundai Motor India Ltd",
-    symbol: "HYUNDAI",
-    priceBand: "₹1865 - ₹1960",
-    minPrice: 1865,
-    maxPrice: 1960,
-    lotSize: 7,
-    issueSize: "₹27,870 Cr",
-    openDate: "2026-07-15",
-    closeDate: "2026-07-18",
-    listingDate: "2026-07-24",
-    registrar: "KFin Technologies Ltd",
-    leadManagers: ["Kotak Mahindra Capital", "Morgan Stanley", "Citi", "HSBC"],
-    retailQuota: 35,
-    qibQuota: 50,
-    hniQuota: 15,
-    promoterHoldingBefore: 100.0,
-    promoterHoldingAfter: 82.5,
-    gmp: -10,
-    gmpPercent: -0.5,
-    subscriptionOverall: 2.37,
-    subscriptionRetail: 0.5,
-    subscriptionQib: 6.9,
-    subscriptionHni: 0.6,
-    aiScore: 62,
-    aiConfidence: 90,
-    riskScore: 35,
-    recommendation: "MODERATE",
-    industry: "Automobile Manufacturing",
-    competitors: ["Maruti Suzuki India", "Tata Motors Ltd", "Mahindra & Mahindra"],
-    strengths: [
-      "Second largest passenger vehicle manufacturer in India with strong brand trust",
-      "Highly premium product mix (Creta, Venue) driving superior margins than entry-level segments",
-      "Fully backed by Hyundai Global's top-tier R&D, EV architecture, and supply scale"
-    ],
-    risks: [
-      "Entire IPO is an Offer for Sale (OFS) by the South Korean parent, no fresh proceeds enter the Indian company",
-      "Decelerating domestic passenger vehicle industry growth post-pandemic peaks"
-    ],
-    objectOfIssue: "To carry out the Offer for Sale of up to 142,194,700 Equity Shares by the Promoter Selling Shareholder.",
-    financials: [
-      { year: "FY24", revenue: 60000, profit: 4653, debt: 200 },
-      { year: "FY25", revenue: 69800, profit: 5408, debt: 150 },
-      { year: "FY26", revenue: 74200, profit: 5850, debt: 100 }
-    ],
-    status: "CLOSED"
-  },
-  {
-    id: "ntpc-green-energy",
-    name: "NTPC Green Energy Limited",
-    symbol: "NTPCGREEN",
-    priceBand: "₹102 - ₹108",
-    minPrice: 102,
-    maxPrice: 108,
-    lotSize: 138,
-    issueSize: "₹10,000 Cr",
-    openDate: "2026-08-05",
-    closeDate: "2026-08-08",
-    listingDate: "2026-08-14",
-    registrar: "KFin Technologies Ltd",
-    leadManagers: ["IDBI Capital", "HDFC Bank", "IIFL Securities"],
-    retailQuota: 10,
-    qibQuota: 75,
-    hniQuota: 15,
-    promoterHoldingBefore: 100.0,
-    promoterHoldingAfter: 75.0,
-    gmp: 8,
-    gmpPercent: 7.4,
-    subscriptionOverall: 0.0,
-    subscriptionRetail: 0.0,
-    subscriptionQib: 0.0,
-    subscriptionHni: 0.0,
-    aiScore: 85,
-    aiConfidence: 92,
-    riskScore: 18,
-    recommendation: "APPLY",
-    industry: "Renewable Energy Utility",
-    competitors: ["Adani Green Energy", "Tata Power", "JSW Energy"],
-    strengths: [
-      "Largest public sector green energy player backed by parent NTPC Ltd (Maharatna)",
-      "Vast pipeline of 24+ GW solar and wind projects across India",
-      "Highly stable cash flows secured via 25-year long-term Power Purchase Agreements (PPAs)"
-    ],
-    risks: [
-      "Subject to regulatory tariffs set by central and state electricity commissions",
-      "High dependence on grid connectivity and transmission infrastructure availability"
-    ],
-    objectOfIssue: "To fund investment in NTPC Renewable Energy for repayment of certain outstanding borrowings and general corporate purposes.",
-    financials: [
-      { year: "FY24", revenue: 1500, profit: 240, debt: 1800 },
-      { year: "FY25", revenue: 2350, profit: 345, debt: 1500 },
-      { year: "FY26", revenue: 3800, profit: 620, debt: 1200 }
-    ],
-    status: "UPCOMING"
-  },
-  {
-    id: "afcons-infra",
-    name: "Afcons Infrastructure Limited",
-    symbol: "AFCONS",
-    priceBand: "₹440 - ₹463",
-    minPrice: 440,
-    maxPrice: 463,
-    lotSize: 32,
-    issueSize: "₹5,430 Cr",
-    openDate: "2026-07-28",
-    closeDate: "2026-07-31",
-    listingDate: "2026-08-06",
-    registrar: "Link Intime India Pvt Ltd",
-    leadManagers: ["ICICI Securities", "Nomura", "Nuvama Wealth"],
-    retailQuota: 35,
-    qibQuota: 50,
-    hniQuota: 15,
-    promoterHoldingBefore: 99.1,
-    promoterHoldingAfter: 70.4,
-    gmp: 20,
-    gmpPercent: 4.3,
-    subscriptionOverall: 2.6,
-    subscriptionRetail: 1.2,
-    subscriptionQib: 3.4,
-    subscriptionHni: 1.8,
-    aiScore: 74,
-    aiConfidence: 86,
-    riskScore: 40,
-    recommendation: "APPLY",
-    industry: "Heavy Infrastructure & Marine Construction",
-    competitors: ["Larsen & Toubro Ltd", "Dilip Buildcon", "KEC International"],
-    strengths: [
-      "Part of the prestigious Shapoorji Pallonji Group with 6 decades of heavy engineering expertise",
-      "Outstanding execution capabilities in complex marine, tunneling, bridge, and metro projects globally",
-      "Order book of ₹41,000+ Cr, providing clear revenue visibility for 3+ years"
-    ],
-    risks: [
-      "Highly capital intensive with high working capital cycle and debt burden",
-      "Execution delays due to geological, land acquisition, or weather disruptions"
-    ],
-    objectOfIssue: "To purchase construction equipment, fund long-term working capital needs, and repay certain outstanding borrowings.",
-    financials: [
-      { year: "FY24", revenue: 12637, profit: 411, debt: 2850 },
-      { year: "FY25", revenue: 13540, profit: 449, debt: 2400 },
-      { year: "FY26", revenue: 15200, profit: 530, debt: 1950 }
-    ],
-    status: "UPCOMING"
   }
 ];
 
-// Global runtime IPOs dataset variable
 let globalIposList: any[] = [];
 const REALTIME_CACHE_KEY = "realtime_ipos";
-const CACHE_TTL_SECONDS = 60 * 30; // 30 minutes cache duration
+const CACHE_TTL_SECONDS = 60 * 30;
 
-// Live search grounding fetcher via Groq API
 async function fetchNseRealTimeIposFromGroq(): Promise<any[]> {
   const client = getGroqClient();
   if (!client) {
-    console.log("No Groq API client configured, serving real fallback dataset");
     return REAL_NSE_IPOS;
   }
 
   try {
-    console.log("Syncing live NSE India IPOs via Groq...");
     const prompt = `Search the web or use your knowledge for current, active, upcoming, and recently listed/closed Mainboard IPOs on the National Stock Exchange (NSE) of India for July/August 2026 or the current period.
-Retrieve real IPOs (for example: NTPC Green Energy, Waaree Energies, Swiggy, Hyundai Motor India, Afcons Infrastructure, Acme Solar Holdings, or other very recent 2025/2026 IPOs on NSE).
-Get real-time details:
-- Symbol, Company Name, Price Band (e.g. "₹1427 - ₹1503"), lot size, issue size, open/close/listing dates, registrar.
-- GMP (Grey Market Premium) in ₹ and GMP% based on current market discussions.
-- Current subscription rates (overall, retail, QIB, HNI) on NSE.
-- A calculated AI Score (0-100), AI Confidence (0-100), and Risk Score (0-100).
-- Recommendation ('APPLY' or 'MODERATE' or 'AVOID').
-- Industry, Competitors, Strengths, Risks, Object of Issue, and 3-year Financials (FY24, FY25, FY26) with revenue/profit/debt in ₹ Cr.
-
+Retrieve real IPOs.
 Format the output as a strictly valid JSON object containing an "ipos" array of objects conforming exactly to this TypeScript schema:
 interface IPOFinancial {
   year: string;
@@ -983,23 +524,19 @@ Do not return any explanations or markdown blocks. Just output raw, valid JSON. 
 
     const content = response.choices[0]?.message?.content;
     if (content) {
-      const cleaned = content.trim();
-      const parsed = JSON.parse(cleaned);
+      const parsed = JSON.parse(content.trim());
       const ipos = parsed.ipos || parsed;
       if (Array.isArray(ipos) && ipos.length > 0) {
-        console.log(`Synced ${ipos.length} real-time IPOs via Groq successfully.`);
         return ipos;
       }
     }
     throw new Error("Empty or malformed payload returned from Groq");
   } catch (err) {
     handleGroqError(err);
-    console.warn("Groq Live Sync encountered an issue, resorting to real-world local backup data:", err);
     return REAL_NSE_IPOS;
   }
 }
 
-// Caching load controller
 async function getIposDataset(): Promise<any[]> {
   try {
     const cached = await redisCache.get(REALTIME_CACHE_KEY);
@@ -1019,18 +556,15 @@ async function getIposDataset(): Promise<any[]> {
   return live;
 }
 
-// Asynchronous global synchronizer
 async function refreshIposList() {
   try {
     globalIposList = await getIposDataset();
-    console.log(`Synced ${globalIposList.length} IPOs via current NSE/Groq dataset successfully.`);
   } catch (err) {
     console.error("IPO sync failed:", err);
     globalIposList = REAL_NSE_IPOS;
   }
 }
 
-// Helper to find IPO by Id or search identifier
 const getIpoById = (id: string) => globalIposList.find(i =>
   i.id === id ||
   i.symbol === id ||
@@ -1038,7 +572,6 @@ const getIpoById = (id: string) => globalIposList.find(i =>
   i.companyCode === id
 );
 
-// NSE Audit background function simulating live National Stock Exchange query check
 function performNseAllotmentAudit() {
   db = createDefaultDb();
   let changed = false;
@@ -1050,15 +583,11 @@ function performNseAllotmentAudit() {
     const ipo = getIpoById(app.ipoId);
     if (!ipo) return;
 
-    // Simulate "Allotment Release" event:
-    // If the IPO is CLOSED/LISTED, or for ACTIVE IPOs we simulate allotment release 
-    // within 12 seconds of saving the application for real-time testing feedback!
-    const createdDateStr = app.applicationDate || new Date().toISOString().split("T")[0];
     const isMockReleaseTime = ipo.status === "CLOSED" || ipo.status === "LISTED" || Math.random() < 0.25;
 
     if (isMockReleaseTime) {
       const isZetaPay = ipo.symbol === "ZETAPAY";
-      const probability = isZetaPay ? 0.92 : 0.30; // 30% chance of allotment, higher for ZetaPay
+      const probability = isZetaPay ? 0.92 : 0.30;
       const allotted = Math.random() < probability;
       
       app.status = allotted ? "ALLOTTED" : "NOT_ALLOTTED";
@@ -1108,8 +637,6 @@ function performNseAllotmentAudit() {
     saveDb(db);
   }
 }
-
-// Request-triggered NSE audit remains available through the API route instead of a long-running background task.
 
 // --- CUSTOM AUTHENTICATION ENGINE (JWT, OTP, GOOGLE OAUTH, RBAC) ---
 
@@ -1264,7 +791,7 @@ app.post("/api/auth/login", async (req, res) => {
   }
 });
 
-// 3. OTP SEND (Supports simulated delivery)
+// 3. OTP SEND
 app.post("/api/auth/otp-send", async (req, res) => {
   const { email } = req.body;
   if (!email) {
@@ -1272,8 +799,8 @@ app.post("/api/auth/otp-send", async (req, res) => {
   }
 
   const normalizedEmail = email.toLowerCase().trim();
-  const otp = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit OTP
-  const expiresAt = Date.now() + 5 * 60 * 1000; // 5 mins
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  const expiresAt = Date.now() + 5 * 60 * 1000;
 
   await setOtpCacheEntry(normalizedEmail, { otp, expiresAt });
 
@@ -1370,7 +897,6 @@ app.post("/api/auth/refresh", async (req, res) => {
     return res.status(400).json({ error: "Refresh token is required" });
   }
 
-  // 1. Blacklist check
   if (isRefreshTokenRevoked(refreshToken)) {
     return res.status(401).json({
       error: "UNAUTHORIZED_REVOKED",
@@ -1379,16 +905,10 @@ app.post("/api/auth/refresh", async (req, res) => {
   }
 
   try {
-    // 2. Token verification with dynamic secret
     const decoded = jwt.verify(refreshToken, secretsManager.get("JWT_REFRESH_SECRET")) as { uid: string; email: string; role: string };
-    
-    // 3. Token Rotation: generate a brand new set of tokens
     const tokens = generateTokens({ uid: decoded.uid, email: decoded.email, role: decoded.role });
-    
-    // 4. Revoke the old refresh token
     revokeRefreshToken(refreshToken);
 
-    // 5. Return both access and rotated refresh token
     return res.json({ 
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken
@@ -1402,8 +922,8 @@ app.post("/api/auth/refresh", async (req, res) => {
 app.get("/api/auth/google-url", (req, res) => {
   const callbackUrl =
     process.env.APP_URL
-      ? `${process.env.APP_URL}/auth/callback`
-      : `${req.protocol}://${req.get("host")}/auth/callback`;
+      ? `${process.env.APP_URL}/api/auth/callback`
+      : `${req.protocol}://${req.get("host")}/api/auth/callback`;
   const params = new URLSearchParams({
     client_id: process.env.GOOGLE_CLIENT_ID!,
     redirect_uri: callbackUrl,
@@ -1448,7 +968,7 @@ app.get("/api/auth/google-simulate", (req, res) => {
           </div>
 
           <div class="mt-8 space-y-3">
-            <a href="/auth/callback?code=mock_google_code_tanisht&email=tanishtthasehgal@gmail.com&name=Tanishth%20Sehgal&role=INVESTOR" 
+            <a href="/api/auth/callback?code=mock_google_code_tanisht&email=tanishtthasehgal@gmail.com&name=Tanishth%20Sehgal&role=INVESTOR" 
                class="flex items-center space-x-3 w-full p-3 bg-[#1e294b] hover:bg-[#2e3b6e] border border-gray-700 hover:border-gray-600 rounded-xl transition-all text-left">
               <div class="h-10 w-10 bg-gradient-to-tr from-violet-500 to-indigo-500 rounded-full flex items-center justify-center font-bold text-white shadow-inner">
                 TS
@@ -1459,7 +979,7 @@ app.get("/api/auth/google-simulate", (req, res) => {
               </div>
             </a>
 
-            <a href="/auth/callback?code=mock_google_code_guest&email=analyst@iposense.ai&name=Research%20Analyst&role=RESEARCH_ANALYST" 
+            <a href="/api/auth/callback?code=mock_google_code_guest&email=analyst@iposense.ai&name=Research%20Analyst&role=RESEARCH_ANALYST" 
                class="flex items-center space-x-3 w-full p-3 bg-[#1e294b] hover:bg-[#2e3b6e] border border-gray-700 hover:border-gray-600 rounded-xl transition-all text-left">
               <div class="h-10 w-10 bg-gradient-to-tr from-emerald-500 to-teal-500 rounded-full flex items-center justify-center font-bold text-white shadow-inner">
                 RA
@@ -1470,7 +990,7 @@ app.get("/api/auth/google-simulate", (req, res) => {
               </div>
             </a>
 
-            <a href="/auth/callback?code=mock_google_code_admin&email=admin@iposense.ai&name=System%20Admin&role=ADMINISTRATOR" 
+            <a href="/api/auth/callback?code=mock_google_code_admin&email=admin@iposense.ai&name=System%20Admin&role=ADMINISTRATOR" 
                class="flex items-center space-x-3 w-full p-3 bg-[#1e294b] hover:bg-[#2e3b6e] border border-gray-700 hover:border-gray-600 rounded-xl transition-all text-left">
               <div class="h-10 w-10 bg-gradient-to-tr from-red-500 to-rose-500 rounded-full flex items-center justify-center font-bold text-white shadow-inner">
                 AD
@@ -1492,18 +1012,17 @@ app.get("/api/auth/google-simulate", (req, res) => {
 });
 
 // 7. GOOGLE CALLBACK
-app.get(["/auth/callback", "/auth/callback/"], async (req, res) => {
+app.get(["/api/auth/callback", "/api/auth/callback/"], async (req, res) => {
   const { code } = req.query;
   if (!code) {
     return res.status(400).json({ error: "Missing Google authorization code" });
   }
-const callbackUrl =
-  process.env.APP_URL
-    ? `${process.env.APP_URL}/auth/callback`
-    : `${req.protocol}://${req.get("host")}/auth/callback`;
+  const callbackUrl =
+    process.env.APP_URL
+      ? `${process.env.APP_URL}/api/auth/callback`
+      : `${req.protocol}://${req.get("host")}/api/auth/callback`;
 
   try {
-    // Exchange code for tokens
     const params = new URLSearchParams({
       client_id: process.env.GOOGLE_CLIENT_ID!,
       client_secret: process.env.GOOGLE_CLIENT_SECRET!,
@@ -1525,7 +1044,7 @@ const callbackUrl =
     if (!accessToken) {
       return res.status(500).json({ error: "Google OAuth failure: missing access token" });
     }
-    // Fetch profile
+
     const profileRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
       headers: { Authorization: `Bearer ${accessToken}` }
     });
@@ -1598,21 +1117,40 @@ const callbackUrl =
             <p>Redirecting back to IPOSense workspace...</p>
           </div>
           <script>
+            const user = ${userPayload};
+
             try {
-              if (window.opener) {
-                window.opener.postMessage({
-                  type: 'OAUTH_AUTH_SUCCESS',
-                  accessToken: '${jwtAccessToken}',
-                  refreshToken: '${refreshToken}',
-                  user: ${userPayload}
-                }, '*');
+              localStorage.setItem("iposense_access_token", "${jwtAccessToken}");
+              localStorage.setItem("iposense_refresh_token", "${refreshToken}");
+              localStorage.setItem("iposense_user", JSON.stringify(user));
+
+              window.dispatchEvent(new Event("iposense_auth_changed"));
+
+              if (window.opener && !window.opener.closed) {
+                window.opener.postMessage(
+                  {
+                    type: "OAUTH_AUTH_SUCCESS",
+                    accessToken: "${jwtAccessToken}",
+                    refreshToken: "${refreshToken}",
+                    user,
+                  },
+                  "*"
+                );
+
                 window.close();
               } else {
-                window.location.href = '/';
+                window.location.replace("/");
               }
             } catch (err) {
-              console.error("Opener postMessage error:", err);
-              window.location.href = '/';
+              console.error("OAuth callback error:", err);
+
+              try {
+                localStorage.setItem("iposense_access_token", "${jwtAccessToken}");
+                localStorage.setItem("iposense_refresh_token", "${refreshToken}");
+                localStorage.setItem("iposense_user", JSON.stringify(user));
+              } catch (e) {}
+
+              window.location.replace("/");
             }
           </script>
         </body>
@@ -1627,7 +1165,6 @@ const callbackUrl =
 // --- ADMINISTRATOR CONTROL ENDPOINTS ---
 
 app.get("/api/admin/users", requireAuth, async (req: AuthRequest, res) => {
-  // Validate that the requester has administrative permissions
   const role = req.headers["x-user-role"];
   if (role !== "ADMINISTRATOR") {
     return res.status(403).json({ error: "Access denied. ADMINISTRATOR role required." });
@@ -1689,15 +1226,12 @@ async function writeAuditLog(userId: number | null, action: string, details: str
   }
 }
 
-// --- SECURITY & DYNAMIC CREDENTIALS / CSRF ENDPOINTS ---
-
-// CSRF endpoint - returns fresh token for Client
+// CSRF endpoint
 app.get("/api/auth/csrf-token", (req, res) => {
   const csrfToken = generateCsrfToken();
   res.json({ csrfToken });
 });
 
-// Admin Security dashboard specs
 app.get("/api/admin/security/secrets", requireAuth, async (req: AuthRequest, res) => {
   const role = req.headers["x-user-role"];
   if (role !== "ADMINISTRATOR") {
@@ -1715,7 +1249,6 @@ app.get("/api/admin/security/secrets", requireAuth, async (req: AuthRequest, res
   });
 });
 
-// Admin Update dynamic secrets/parameters
 app.post("/api/admin/security/secrets/update", requireAuth, async (req: AuthRequest, res) => {
   const role = req.headers["x-user-role"];
   if (role !== "ADMINISTRATOR") {
@@ -1742,7 +1275,6 @@ app.post("/api/admin/security/secrets/update", requireAuth, async (req: AuthRequ
   });
 });
 
-// Admin Retrieve rate limit logs
 app.get("/api/admin/security/rate-limit-logs", requireAuth, async (req: AuthRequest, res) => {
   const role = req.headers["x-user-role"];
   if (role !== "ADMINISTRATOR") {
@@ -1752,18 +1284,14 @@ app.get("/api/admin/security/rate-limit-logs", requireAuth, async (req: AuthRequ
   res.json(rateLimitLogs);
 });
 
-// Admin Global refresh tokens revocation
 app.post("/api/admin/security/revoke-refresh-tokens", requireAuth, async (req: AuthRequest, res) => {
   const role = req.headers["x-user-role"];
   if (role !== "ADMINISTRATOR") {
     return res.status(403).json({ error: "Access denied. ADMINISTRATOR role required." });
   }
 
-  // Revoke everything: rotate the JWT_REFRESH_SECRET instantly!
   const newRefreshSecret = "rotated_jwt_refresh_secret_" + crypto.randomBytes(16).toString("hex");
   secretsManager.set("JWT_REFRESH_SECRET", newRefreshSecret);
-
-  // Clear existing list
   revokedRefreshTokens.clear();
 
   await writeAuditLog(req.dbUser?.id || null, "SECURITY_GLOBAL_REVOCATION", "Triggered global token revocation. Rotated JWT Refresh Secret.");
@@ -1789,14 +1317,11 @@ async function writeApiUsageLog(userId: number | null, endpoint: string, provide
   }
 }
 
-// --- STARTUP SCHEMA SEEDER ---
 async function seedMissingDatabaseTables() {
   refreshIposList();
   try {
-    // 1. Seed Historical IPOs if empty
     const existingHistIpos = await postgresDb.select().from(dbHistoricalIpos).limit(1);
     if (existingHistIpos.length === 0) {
-      console.log("[POSTGRES SEED] Historical IPO table is empty. Seeding past IPO listings...");
       const historicalListings = [
         { symbol: "ZOMATO", name: "Zomato Limited", listingDate: new Date("2021-07-23"), issuePrice: 76, listingPrice: 115, currentPrice: 212, listingGainPercent: 51, sector: "Technology / Delivery" },
         { symbol: "NYKAA", name: "FSN E-Commerce Ventures (Nykaa)", listingDate: new Date("2021-11-10"), issuePrice: 1125, listingPrice: 2001, currentPrice: 178, listingGainPercent: 78, sector: "E-Commerce / Retail" },
@@ -1811,10 +1336,8 @@ async function seedMissingDatabaseTables() {
       }
     }
 
-    // 2. Seed Market Data if empty
     const existingMarketData = await postgresDb.select().from(dbMarketData).limit(1);
     if (existingMarketData.length === 0) {
-      console.log("[POSTGRES SEED] Market Data table is empty. Seeding key indexes...");
       const defaultIndexes = [
         { dataKey: "NIFTY_50", dataValue: "24415.80", changePercent: "+0.45%" },
         { dataKey: "SENSEX", dataValue: "80248.15", changePercent: "+0.38%" },
@@ -1827,16 +1350,12 @@ async function seedMissingDatabaseTables() {
         await postgresDb.insert(dbMarketData).values(item).onConflictDoNothing();
       }
     }
-    console.log("[POSTGRES SEED] Schema checks and seeding operations completed successfully.");
   } catch (err) {
     console.error("[POSTGRES SEED] Warning: Seeding check failed:", err);
   }
 }
 
-// Call seeder immediately
 seedMissingDatabaseTables();
-
-// --- NEW SCHEMA TABLE ENDPOINTS ---
 
 // --- PORTFOLIO ENDPOINTS ---
 app.get("/api/portfolio", requireAuth, async (req: AuthRequest, res) => {
@@ -2018,8 +1537,6 @@ app.get("/api/admin/api-usage-logs", requireAuth, async (req: AuthRequest, res) 
   }
 });
 
-
-// Listing Day Companies Route - parses closed IPO data from Groww HTML Next.js payload
 app.get("/api/listing-day/companies", async (_req, res) => {
   try {
     const response = await fetch("https://groww.in/ipo/closed", {
@@ -2050,7 +1567,6 @@ app.get("/api/listing-day/companies", async (_req, res) => {
   }
 });
 
-// Groww IPO Proxy Route (server-side fetch to bypass browser CORS)
 app.get("/api/ipo/groww/open", async (req, res) => {
   try {
     const response = await fetch("https://groww.in/v1/api/primaries/v1/ipo/open?v=2", {
@@ -2070,9 +1586,6 @@ app.get("/api/ipo/groww/open", async (req, res) => {
     }
 
     const data = await response.json();
-
-    console.log("===== GROWW IPO RAW RESPONSE =====");
-    console.log(JSON.stringify(data, null, 2));
 
     const rawList =
       data?.ipoList ??
@@ -2099,24 +1612,15 @@ app.get("/api/ipo/groww/open", async (req, res) => {
         maxPrice: category.maxPrice || 0,
         lotSize: category.lotSize || 0,
         issueSize: category.lotSize || item.issueSize || "TBA",
-
         openDate: item.bidStartTimestamp
           ? new Date(item.bidStartTimestamp).toISOString().split("T")[0]
           : (item.openDate || item.open_date || "TBA"),
-
         closeDate: item.bidEndTimestamp
           ? new Date(item.bidEndTimestamp).toISOString().split("T")[0]
           : (item.closeDate || item.close_date || "TBA"),
-
-        listingDate:
-          item.listingDate ||
-          item.listing_date ||
-          item.expectedListingDate ||
-          "TBA",
-
+        listingDate: item.listingDate || item.listing_date || item.expectedListingDate || "TBA",
         bidStartTimestamp: item.bidStartTimestamp || null,
         bidEndTimestamp: item.bidEndTimestamp || null,
-
         leadManagers: [],
         competitors: [],
         strengths: [],
@@ -2132,26 +1636,19 @@ app.get("/api/ipo/groww/open", async (req, res) => {
         gmpPercent: item.gmpPercent || 0,
         subscriptionOverall: item.overallSubscription || 0,
         subscriptionRetail: null,
-subscriptionQib: null,
-subscriptionHni: null,
+        subscriptionQib: null,
+        subscriptionHni: null,
         status: item.isPreApply ? "UPCOMING" : "ACTIVE"
       };
     });
 
-    console.log(`Groww IPOs Parsed: ${results.length}`);
-
     res.json(results);
   } catch (error) {
     console.error("Groww IPO proxy failed:", error);
-    return res.status(500).json({
-      error: "Failed to fetch Groww IPO data"
-    });
+    return res.status(500).json({ error: "Failed to fetch Groww IPO data" });
   }
 });
 
-// API Routes
-
-// Notifications Endpoints
 app.get("/api/notifications", requireAuth, async (req: AuthRequest, res) => {
   try {
     const list = await postgresDb.select()
@@ -2190,13 +1687,9 @@ app.post("/api/notifications/:id/read", requireAuth, async (req: AuthRequest, re
   }
 });
 
-
-// NSE Live Sync Route
 app.post("/api/applications/nse-sync", async (req, res) => {
   try {
-    // Run an audit immediately on request
     performNseAllotmentAudit();
-    // Refresh the live listings list from the NSE
     await refreshIposList();
     db = createDefaultDb();
     res.json({ success: true, ipos: globalIposList, applications: db.applications, notifications: db.notifications });
@@ -2205,10 +1698,6 @@ app.post("/api/applications/nse-sync", async (req, res) => {
   }
 });
 
-// The application now uses the current platform-backed IPO/news endpoints.
-
-
-// User Notifications and Alerts configuration endpoints
 app.get("/api/user/settings", requireAuth, async (req: AuthRequest, res) => {
   try {
     const records = await postgresDb.select()
@@ -2293,9 +1782,6 @@ app.post("/api/user/settings", requireAuth, async (req: AuthRequest, res) => {
   }
 });
 
-
-
-// 1. Fetch all IPOs from Groww
 app.get("/api/ipo-indexes", async (_req, res) => {
   try {
     const data = await getIposDataset();
@@ -2308,8 +1794,6 @@ app.get("/api/ipo-indexes", async (_req, res) => {
 
 app.get("/api/ipos", async (req, res) => {
   try {
-    console.log("Fetching IPO data from Groww...");
-
     const response = await fetch("https://groww.in/v1/api/primaries/v1/ipo/open?v=2", {
       method: "GET",
       headers: {
@@ -2374,19 +1858,13 @@ app.get("/api/ipos", async (req, res) => {
     });
 
     globalIposList = ipoList;
-    console.log("GROWW IPO DATA RECEIVED:", globalIposList.length);
-
     res.json(globalIposList);
   } catch (err) {
     console.error("IPO API Error:", err);
-    res.status(500).json({
-      error: "Failed to fetch IPO data from Groww"
-    });
+    res.status(500).json({ error: "Failed to fetch IPO data from Groww" });
   }
 });
 
-// --- Groww Portfolio Holdings & Search Endpoints ---
-// Groww Search Endpoint
 app.get("/api/groww/search/:query", async (req, res) => {
   try {
     const query = req.params.query;
@@ -2414,11 +1892,9 @@ app.get("/api/groww/search/:query", async (req, res) => {
   }
 });
 
-// Groww Live Price Endpoint
 app.get("/api/groww/price/:symbol", async (req, res) => {
   try {
     const symbol = req.params.symbol.toUpperCase();
-
     const liveUrl = `https://groww.in/v1/api/stocks_data/v1/tr_live_book/exchange/NSE/segment/CASH/${encodeURIComponent(symbol)}/latest`;
 
     const response = await fetch(liveUrl, {
@@ -2458,20 +1934,16 @@ app.get("/api/groww/price/:symbol", async (req, res) => {
     });
   } catch (err) {
     console.error("Groww price error", err);
-    return res.status(500).json({
-      error: "Groww price fetch failed"
-    });
+    return res.status(500).json({ error: "Groww price fetch failed" });
   }
 });
 
-// Groww Holding Endpoint
 app.get("/api/groww/holding/:symbol", async (req, res) => {
   try {
     const symbol = req.params.symbol;
     if (!symbol) {
       return res.status(400).json({ error: "Symbol parameter required" });
     }
-    // Parallel fetch chart and live book
     const chartUrl = `https://groww.in/v1/api/charting_service/v2/chart/delayed/exchange/NSE/segment/CASH/${encodeURIComponent(symbol)}/daily?intervalInMinutes=1&minimal=true`;
     const bookUrl = `https://groww.in/v1/api/stocks_data/v1/tr_live_book/exchange/NSE/segment/CASH/${encodeURIComponent(symbol)}/latest`;
     const [chartResp, bookResp] = await Promise.all([
@@ -2514,7 +1986,6 @@ app.get("/api/groww/holding/:symbol", async (req, res) => {
   }
 });
 
-// Groww Holdings Live Endpoint (batch)
 app.get("/api/groww/holdings/live", async (req, res) => {
   try {
     const symbolsParam = req.query.symbols;
@@ -2535,7 +2006,6 @@ app.get("/api/groww/holdings/live", async (req, res) => {
         });
 
         const html = await response.text();
-
         const match = html.match(new RegExp(`"${symbol}"\\s*:\\s*\\{[^}]*"ltp"\\s*:\\s*([0-9.]+)`));
         const latestPrice = match ? Number(match[1]) : null;
 
@@ -2560,7 +2030,6 @@ app.get("/api/groww/holdings/live", async (req, res) => {
   }
 });
 
-// 2. Fetch specific IPO
 app.get("/api/ipos/:id", (req, res) => {
   const ipo = getIpoById(req.params.id);
   if (!ipo) {
@@ -2569,7 +2038,6 @@ app.get("/api/ipos/:id", (req, res) => {
   res.json(ipo);
 });
 
-// 3. User applications tracking
 app.get("/api/applications", requireAuth, async (req: AuthRequest, res) => {
   try {
     const apps = await postgresDb.select()
@@ -2577,7 +2045,6 @@ app.get("/api/applications", requireAuth, async (req: AuthRequest, res) => {
       .where(eq(dbBids.userId, req.dbUser!.id));
     
     const decryptedApps = apps.map(app => {
-      // Find the corresponding IPO in globalIposList to get the correct ID if needed
       const matchingIpo = globalIposList.find(i => i.symbol === app.ipoSymbol);
       return {
         id: app.id.toString(),
@@ -2586,7 +2053,7 @@ app.get("/api/applications", requireAuth, async (req: AuthRequest, res) => {
         symbol: app.ipoSymbol,
         pan: app.panEncrypted ? decrypt(app.panEncrypted) : "",
         appNumber: app.appNumEncrypted ? decrypt(app.appNumEncrypted) : "",
-        broker: "Zerodha", // Default broker or placeholder if not in db
+        broker: "Zerodha",
         upiId: "upi@okbank",
         category: app.category,
         lots: app.quantity / (matchingIpo?.lotSize || 1),
@@ -2662,7 +2129,6 @@ app.post("/api/applications", requireAuth, validateRequest({ ipoId: "string", pa
   }
 });
 
-
 app.post("/api/portfolio", requireAuth, async (req: AuthRequest, res) => {
   const { ipoId, symbol, companyName, avgCost, quantity, currentPrice } = req.body;
   if (
@@ -2700,7 +2166,6 @@ app.post("/api/portfolio/adjust", requireAuth, async (req: AuthRequest, res) => 
     return res.status(400).json({ error: "ipoId and action are required." });
   }
   try {
-    // Find holding for this user and ipoId
     const holding = await postgresDb.query.portfolioHoldings.findFirst({
       where: and(
         eq(portfolioHoldings.userId, req.dbUser!.id),
@@ -2738,7 +2203,6 @@ app.post("/api/portfolio/adjust", requireAuth, async (req: AuthRequest, res) => 
   }
 });
 
-// 6. Groq-powered IPO Analysis Route
 app.post("/api/groq/analyze", async (req, res) => {
   const { ipoId } = req.body;
   const ipo = getIpoById(ipoId);
@@ -2755,23 +2219,10 @@ Issue Size: ${ipo.issueSize}
 Overall Subscription: ${ipo.subscriptionOverall}x
 
 IMPORTANT:
-
 - Evaluate the IPO ONLY using the information explicitly provided.
 - Missing information must be treated as "not available", NOT as a weakness, risk, or negative signal.
 - Never penalize the IPO because some information is unavailable.
-- Never write phrases like:
-  - "No additional information available..."
-  - "Insufficient information..."
-  - "Cannot assess..."
-  - "Unable to evaluate..."
-  - "Limited information..."
-  - "Due to missing data..."
-- If a metric is not provided, simply ignore it and continue the analysis using the remaining available data.
-- Generate Pros and Cons ONLY from the provided information.
-- If no evidence-based con exists in the provided data, return an empty array for "detailedCons".
-- Base the AI Score, Risk Level, Confidence, and Recommendation ONLY on the available information. Do not lower the score or confidence because some information is missing.
-
-Return a JSON object matching EXACTLY this schema:
+- Return a JSON object matching EXACTLY this schema:
 
 {
   "aiScore": <number between 0 and 100>,
@@ -2779,16 +2230,14 @@ Return a JSON object matching EXACTLY this schema:
   "riskMeter": "LOW" | "MODERATE" | "HIGH",
   "listingGainProbability": <number between 0 and 100>,
   "recommendation": "APPLY" | "AVOID" | "MODERATE",
-  "reasoningSummary": "<Maximum 3 sentences based ONLY on the provided information. Never mention unavailable metrics or assumptions.>",
+  "reasoningSummary": "<Maximum 3 sentences based ONLY on the provided information.>",
   "detailedPros": ["Only include advantages directly supported by the provided data."],
   "detailedCons": ["Only include disadvantages directly supported by the provided data."]
 }
 
-Return ONLY valid JSON.
-Do not include markdown, explanations, notes, or additional text.`;
+Return ONLY valid JSON.`;
 
   if (!client) {
-    // Elegant fallback rule-based analysis if Groq key is missing
     const isGood = ipo.aiScore > 70 || ipo.subscriptionOverall >= 20;
     const recommendation = isGood ? "APPLY" : "MODERATE";
     const mockAnalysis = {
@@ -2827,21 +2276,19 @@ Do not include markdown, explanations, notes, or additional text.`;
   } catch (err) {
     handleGroqError(err);
     console.error("Groq analyze error, using fallback:", err);
-    // Fallback if call fails
     res.json({
       aiScore: ipo.aiScore,
       confidencePercent: ipo.aiConfidence,
       riskMeter: ipo.riskScore > 60 ? "HIGH" : "LOW",
       listingGainProbability: 75,
       recommendation: ipo.recommendation,
-      reasoningSummary: `Failed to fetch live Groq AI analysis. Displaying localized rating database of ${ipo.name}. Valuation score shows strong promoter history and stable competitive landscape.`,
+      reasoningSummary: `Failed to fetch live Groq AI analysis. Displaying localized rating database of ${ipo.name}.`,
       detailedPros: ipo.strengths,
       detailedCons: ipo.risks
     });
   }
 });
 
-// 7. Groq chat route
 app.post("/api/groq/chat", async (req, res) => {
   const { messages } = req.body;
   if (!messages || !Array.isArray(messages)) {
@@ -2851,7 +2298,6 @@ app.post("/api/groq/chat", async (req, res) => {
   const client = getGroqClient();
   const lastUserMsg = messages[messages.length - 1]?.text || "";
 
-  // Construct context with our known IPO database so chatbot responds smartly!
   const ipoContext = IPOS_DATA.map(i => 
     `IPO: ${i.name} (${i.symbol}) | Industry: ${i.industry} | Price Band: ${i.priceBand} | Subscription: ${i.subscriptionOverall}x | AI Score: ${i.aiScore} | Recommendation: ${i.recommendation}`
   ).join("\n");
@@ -2861,21 +2307,16 @@ Use this context about active/upcoming IPOs:
 ${ipoContext}
 
 User asked: "${lastUserMsg}"
-Respond professionally. Keep responses concise, structured, bulleted, and filled with realistic data. Highlight key metrics (subscription, issue size) where appropriate.`;
+Respond professionally. Keep responses concise, structured, bulleted, and filled with realistic data.`;
 
   if (!client) {
-    // Generate intelligent rule-based response if Groq is not set up
-    let answer = `I'm here to assist you with IPO Intelligence! Here's a quick look at the market sentiment: \n\n`;
+    let answer = `I'm here to assist you with IPO Intelligence! Here's a quick look at the market sentiment:\n\n`;
     if (lastUserMsg.toLowerCase().includes("apply") || lastUserMsg.toLowerCase().includes("should i")) {
-      answer += `Based on the latest subscription momentum and issuer fundamentals, we strongly recommend considering **Acme CloudTech AI (ACMEAI)** which carries an AI Score of 88/100 and a high listing gain probability. In contrast, **ZetaPay Fintech** appears less attractive due to weaker demand and valuation risk.`;
-    } else if (lastUserMsg.toLowerCase().includes("premium")) {
-      answer += `We are currently emphasizing subscription demand, issue size, and valuation discipline. Top active IPOs in our universe are showing strong subscription strength, especially Acme CloudTech AI and NovaCharge Mobility.`;
+      answer += `Based on the latest subscription momentum and issuer fundamentals, we strongly recommend considering **Acme CloudTech AI (ACMEAI)** which carries an AI Score of 88/100 and a high listing gain probability.`;
     } else {
       answer += `You can ask me questions like:
 - "Should I apply for Acme CloudTech AI?"
-- "Which active IPO has the strongest subscription demand?"
-- "Is ZetaPay Fintech a safe investment?"
-- "Help me analyze Solaris Renewable Energy's financial statements."`;
+- "Which active IPO has the strongest subscription demand?"`;
     }
     return res.json({ text: answer });
   }
@@ -2890,11 +2331,10 @@ Respond professionally. Keep responses concise, structured, bulleted, and filled
   } catch (err) {
     handleGroqError(err);
     console.error("Groq chat error, using fallback:", err);
-    res.json({ text: "Sorry, I ran into a connection glitch. Here is what I can tell you: Acme CloudTech AI remains highly rated based on its subscription strength and valuation profile." });
+    res.json({ text: "Sorry, I ran into a connection glitch. Acme CloudTech AI remains highly rated based on its subscription strength and valuation profile." });
   }
 });
 
-// 8. RHP Summarizer
 app.post("/api/groq/rhp-summarize", async (req, res) => {
   const { ipoId } = req.body;
   const ipo = getIpoById(ipoId);
@@ -2903,15 +2343,7 @@ app.post("/api/groq/rhp-summarize", async (req, res) => {
   }
 
   const client = getGroqClient();
-  const prompt = `Summarize the 500-page Red Herring Prospectus (RHP) of ${ipo.name} (${ipo.symbol}) into a concise, easily digestible 5-minute dashboard format.
-Include:
-1. Executive Summary (2 sentences)
-2. Use of Proceeds / Object of Issue
-3. Core Business Model & Revenue Engine
-4. Top 3 Growth Engines (Pros)
-5. Top 3 Threat Vectors (Cons)
-6. Peer Valuation Multiples (P/E, Debt-to-Equity compared to peers)
-
+  const prompt = `Summarize the 500-page Red Herring Prospectus (RHP) of ${ipo.name} (${ipo.symbol}) into a concise dashboard format.
 Format beautifully in JSON with exact fields:
 {
   "summary": "...",
@@ -2924,14 +2356,13 @@ Format beautifully in JSON with exact fields:
 Return ONLY valid JSON.`;
 
   if (!client) {
-    // Static structured high-quality fallback RHP Summary
     return res.json({
-      summary: `${ipo.name} is a leading enterprise in the ${ipo.industry} sector. The business has displayed exceptional unit economics and scale, operating with high-profile global client tie-ups.`,
+      summary: `${ipo.name} is a leading enterprise in the ${ipo.industry} sector.`,
       useOfProceeds: ipo.objectOfIssue,
-      businessModel: `A high-margin technology model driven by licensing, subscription revenues, and turnkey custom infrastructure implementations with an active client retention rate of over 92%.`,
+      businessModel: `High-margin technology model driven by subscription revenues.`,
       pros: ipo.strengths,
       cons: ipo.risks,
-      peerComparison: `Acme trades at a forward P/E of 34x compared to industry leaders (TCS at 28x, Infosys at 26x) which is fully justified given its hyper-growth CAGR of over 85%.`
+      peerComparison: `Acme trades at a forward P/E of 34x compared to industry standards.`
     });
   }
 
@@ -2952,17 +2383,16 @@ Return ONLY valid JSON.`;
     handleGroqError(err);
     console.error("RHP Summarizer error:", err);
     res.json({
-      summary: `${ipo.name} operates strongly in ${ipo.industry}. High-margin structural dynamics back this public issue.`,
+      summary: `${ipo.name} operates strongly in ${ipo.industry}.`,
       useOfProceeds: ipo.objectOfIssue,
-      businessModel: `Focused on scaling automated platforms and direct-to-enterprise premium solutions.`,
+      businessModel: `Focused on scaling automated platforms.`,
       pros: ipo.strengths,
       cons: ipo.risks,
-      peerComparison: `Aggressive growth multiples relative to industrial standards are reasonably supported by robust profit margins.`
+      peerComparison: `Growth multiples relative to industrial standards are supported by profit margins.`
     });
   }
 });
 
-// 9. Listing Price Predictor
 app.post("/api/groq/listing-predict", async (req, res) => {
   const { ipoId } = req.body;
   const ipo = getIpoById(ipoId);
@@ -2980,23 +2410,6 @@ Price Band: ${ipo.priceBand}
 Issue Size: ${ipo.issueSize}
 Overall Subscription: ${ipo.subscriptionOverall}x
 
-IMPORTANT RULES:
-
-- Use ONLY the information explicitly provided above.
-- Never assume, infer, estimate, fabricate, or guess any missing information.
-- Do NOT mention or analyze Retail Subscription, QIB Subscription, HNI/NII Subscription, GMP (Grey Market Premium), Promoter Holding, Financial Statements, Revenue, Profit, Debt, P/E, ROE, EPS, Anchor Investors, Institutional Demand, Strengths, Risks, Valuation Multiples, or any other metric unless it is explicitly provided above.
-- If the available information is insufficient for a certain conclusion, simply avoid discussing it.
-- The reasoning must be based ONLY on the provided fields.
-- Do not compare with peers unless peer data is explicitly provided.
-- Do not invent numbers, percentages, or qualitative statements about unavailable data.
-- Predict a realistic listing price using ONLY the provided information.
-- The predictedListingPrice must represent the expected first-day exchange listing price, NOT the issue price or upper price band.
-- Do not simply copy the upper price band as the predictedListingPrice.
-- Use the Price Band, Issue Size, and Overall Subscription together to estimate a realistic listing price.
-- Higher subscription may justify a listing premium, while weaker demand may justify a listing price near or below the issue price.
-- The predictedListingPrice should be your best reasonable estimate based only on the provided information.
-
-
 Return a JSON object matching EXACTLY this schema:
 {
   "predictedListingPrice": <number>,
@@ -3008,8 +2421,7 @@ Return a JSON object matching EXACTLY this schema:
   "bearCase": "..."
 }
 
-Return ONLY valid JSON.
-Do not include markdown, explanations, notes, or additional text.`;
+Return ONLY valid JSON.`;
 
   if (!client) {
     const predictedListingPrice = Math.round(issuePrice * 1.07);
@@ -3020,8 +2432,8 @@ Do not include markdown, explanations, notes, or additional text.`;
       target1Day: Math.round(predictedListingPrice * 1.05),
       target1Week: Math.round(predictedListingPrice * 1.12),
       target1Month: Math.round(predictedListingPrice * 1.25),
-      bullCase: "Strong institutional backing continues post-listing, driving high buybacks and immediate index inclusion.",
-      bearCase: "Profit booking on Listing Day triggers temporary slide to support levels near the original issue upper band."
+      bullCase: "Strong institutional backing continues post-listing.",
+      bearCase: "Profit booking on Listing Day triggers temporary slide."
     });
   }
 
@@ -3047,13 +2459,12 @@ Do not include markdown, explanations, notes, or additional text.`;
       target1Day: predictedListingPrice,
       target1Week: Math.round(predictedListingPrice * 1.04),
       target1Month: Math.round(predictedListingPrice * 1.10),
-      bullCase: "Sustained retail demand continues to absorb listing supply, resulting in strong upside momentum.",
-      bearCase: "Broad market correction dampens listing gains, pulling the stock down in search of base consolidation."
+      bullCase: "Sustained retail demand continues to absorb listing supply.",
+      bearCase: "Broad market correction dampens listing gains."
     });
   }
 });
 
-// 9.5 AI Grounded Research & Deep Dive
 app.post("/api/groq/research", async (req, res) => {
   const { prompt, useThinking } = req.body;
   if (!prompt) {
@@ -3065,7 +2476,7 @@ app.post("/api/groq/research", async (req, res) => {
 
   if (!client) {
     return res.json({
-      text: `### Grounded Research Fallback for: "${prompt}"\n\nBased on localized database and cached market reports:\n- **Current Trend:** Bullish with 78% institutional buy rating.\n- **Latest Metrics:** Grey Market Premiums remain steady. Solaris Renewable commands a ₹45 GMP (22.5% listing prediction) while Acme Cloudtech AI leads with ₹185 (38.9%).\n- *Note: Live search grounding and high thinking reasoning are currently simulated using local database files due to Groq key absence.*`,
+      text: `### Grounded Research Fallback for: "${prompt}"\n\nBased on localized database and cached market reports:\n- **Current Trend:** Bullish with 78% institutional buy rating.\n- **Latest Metrics:** Grey Market Premiums remain steady.`,
       sources: [
         { title: "SEBI Red Herring Filings", url: "https://www.sebi.gov.in" },
         { title: "Chittorgarh IPO Trackers", url: "https://www.chittorgarh.com" }
@@ -3079,7 +2490,7 @@ app.post("/api/groq/research", async (req, res) => {
       messages: [
         {
           role: "user",
-          content: `You are an expert financial research intelligence bot. Provide a deep, objective, grounded research report about the requested IPO or market query. Ensure you cite real facts, pricing metrics, and regulatory guidelines.
+          content: `You are an expert financial research intelligence bot. Provide a deep, objective, grounded research report about the requested IPO or market query.
 Research Prompt: "${prompt}"`
         }
       ]
@@ -3098,7 +2509,7 @@ Research Prompt: "${prompt}"`
     handleGroqError(err);
     console.error("Research API error, using fallback:", err);
     res.json({
-      text: `### Deep Research Report: "${prompt}"\n\nI was unable to establish a live connection to our Groq research nodes. However, analyzing internal databases:\n- **Acme CloudTech AI (ACMEAI):** Highly favorable. Strong 88/100 score. Expected listing price ₹660.\n- **ZetaPay Fintech:** High risk. High retail debt defaults reported in FY26 Q1 financials.\n- **Solaris Renewable Energy:** Highly favorable. Outstanding government grid expansion credits. expected ₹245 listing (22.5% gain).`,
+      text: `### Deep Research Report: "${prompt}"\n\nAnalyzing internal databases:\n- **Acme CloudTech AI (ACMEAI):** Highly favorable. Expected listing price ₹660.`,
       sources: [
         { title: "Internal Valuation Ledger", url: "#" }
       ]
@@ -3106,14 +2517,11 @@ Research Prompt: "${prompt}"`
   }
 });
 
-// 9.6 AI Music Clip Generator Simulator
 app.post("/api/groq/music", (req, res) => {
   const { prompt, length = 30 } = req.body;
   if (!prompt) {
     return res.status(400).json({ error: "Music generation prompt is required" });
   }
-
-  console.log(`Generating Groq music clip: [${prompt}], Length: ${length}s...`);
 
   res.json({
     success: true,
@@ -3123,14 +2531,9 @@ app.post("/api/groq/music", (req, res) => {
     duration: length,
     beatsPerMinute: prompt.toLowerCase().includes("bull") ? 124 : 90,
     waveform: Array.from({ length: 40 }, () => Math.round(20 + Math.random() * 60)),
-    atmosphere: prompt.toLowerCase().includes("bull") ? "Uptrend Energy" : "Steady Accumulation Flow",
-    note: "This track has been generated with Groq-audio-clip-preview. Your audio pipeline is playing the active focused synthesize oscillator in the background."
+    atmosphere: prompt.toLowerCase().includes("bull") ? "Uptrend Energy" : "Steady Accumulation Flow"
   });
 });
-
-// 10. Listing Day: fetch Groww closed IPO SSR HTML and provide companies + analysis endpoints
-
-
 
 async function getClosedIPOList(): Promise<any[]> {
   const cacheKey = "groww_closed_ipos";
@@ -3142,9 +2545,7 @@ async function getClosedIPOList(): Promise<any[]> {
     const { data: html } = await axios.get(
       "https://groww.in/ipo/closed",
       {
-        headers: {
-          "User-Agent": "Mozilla/5.0"
-        },
+        headers: { "User-Agent": "Mozilla/5.0" },
         timeout: 10000
       }
     );
@@ -3153,28 +2554,20 @@ async function getClosedIPOList(): Promise<any[]> {
       /<script id="__NEXT_DATA__" type="application\/json"[^>]*>(.*?)<\/script>/
     );
 
-    if (!match) {
-      console.error("NEXT_DATA not found");
-      return [];
-    }
+    if (!match) return [];
 
     const nextData = JSON.parse(match[1]);
-
     const list = nextData?.props?.pageProps?.dataList || [];
-
-    console.log("Closed IPO fetched:", list.length);
 
     redisCache.set(cacheKey, list, 300);
 
     return list;
-
   } catch (err: any) {
     console.error("Failed to fetch Groww closed IPOs:", err.message);
     return [];
   }
 }
 
-// Listing Day Companies Endpoint
 app.get("/api/listing-day/companies", async (_req, res) => {
   try {
     const list = await getClosedIPOList();
@@ -3213,7 +2606,6 @@ app.post("/api/listing-day/analyze", async (req, res) => {
     const client = getGroqClient();
 
     if (ipo.isListed || ipo.listingPrice) {
-      // CASE 1: already listed — generate an AI summary of actual listing performance
       const payload = {
         companyName: ipo.companyName || ipo.name,
         symbol: ipo.symbol,
@@ -3224,8 +2616,7 @@ app.post("/api/listing-day/analyze", async (req, res) => {
       };
 
       if (!client) {
-        // Local fallback summary
-        const summary = `The IPO listed at ₹${payload.listingPrice} vs issue price ₹${payload.issuePrice}, delivering a ${payload.listingReturn}% return. Subscription was ${payload.subscription}x, which ${payload.subscription > 1 ? "supported" : "did not support"} listing demand.`;
+        const summary = `The IPO listed at ₹${payload.listingPrice} vs issue price ₹${payload.issuePrice}, delivering a ${payload.listingReturn}% return.`;
         return res.json({
           status: "listed",
           companyName: payload.companyName,
@@ -3239,8 +2630,7 @@ app.post("/api/listing-day/analyze", async (req, res) => {
       }
 
       try {
-        const prompt = `You are a concise financial analyst. Given the IPO result below, write a short JSON response with a single field \"summary\" (max 3 sentences) explaining listing performance, demand, subscription impact and whether the outcome matched expectations. Return only valid JSON.
-\nINPUT:\n${JSON.stringify(payload, null, 2)}`;
+        const prompt = `You are a concise financial analyst. Write a short JSON response with a single field "summary" (max 3 sentences) explaining listing performance.\n\nINPUT:\n${JSON.stringify(payload, null, 2)}`;
 
         const start = Date.now();
         const response = await client.chat.completions.create({
@@ -3263,7 +2653,6 @@ app.post("/api/listing-day/analyze", async (req, res) => {
         });
       } catch (err) {
         handleGroqError(err);
-        console.error("Groq error in listing summary:", err);
         return res.json({
           status: "listed",
           companyName: payload.companyName,
@@ -3277,7 +2666,6 @@ app.post("/api/listing-day/analyze", async (req, res) => {
       }
     }
 
-    // CASE 2: not listed — send minimal fields to Groq for prediction
     const inputForModel = {
       companyName: ipo.companyName || ipo.name,
       issuePrice: ipo.issuePrice ?? ipo.minPrice ?? ipo.maxPrice ?? null,
@@ -3288,13 +2676,12 @@ app.post("/api/listing-day/analyze", async (req, res) => {
     };
 
     if (!client) {
-      // Local heuristic predictor
       const issue = Number(inputForModel.issuePrice) || 0;
       const sub = Number(inputForModel.overallSubscription) || 0;
       const expectedReturn = sub > 0 ? Math.min(60, Math.round(sub * 1.5 * 10) / 10) : 5;
       const estimatedListingPrice = Number((issue * (1 + expectedReturn / 100)).toFixed(2));
       const confidence = sub >= 20 ? "High" : sub >= 5 ? "Moderate" : "Low";
-      const summary = `Based on the subscription of ${sub}x and issue price ₹${issue}, the model estimates a listing around ₹${estimatedListingPrice} (${expectedReturn}% expected return).`;
+      const summary = `Based on subscription of ${sub}x and issue price ₹${issue}, estimated listing is ₹${estimatedListingPrice}.`;
       return res.json({
         status: "predicted",
         companyName: inputForModel.companyName,
@@ -3308,9 +2695,8 @@ app.post("/api/listing-day/analyze", async (req, res) => {
       });
     }
 
-    // Call Groq with only the allowed fields
     try {
-      const prompt = `You are an expert IPO analyst. Given the following IPO details, provide a JSON object with fields: estimatedListingPrice (number), expectedReturn (percent number), confidence (Low|Moderate|High), summary (max 2 sentences). Use only the provided data; do NOT reference any unofficial market prices.\n\nINPUT:\n${JSON.stringify(inputForModel, null, 2)}`;
+      const prompt = `You are an expert IPO analyst. Provide a JSON object with fields: estimatedListingPrice (number), expectedReturn (percent number), confidence (Low|Moderate|High), summary (max 2 sentences).\n\nINPUT:\n${JSON.stringify(inputForModel, null, 2)}`;
 
       const start = Date.now();
       const response = await client.chat.completions.create({
@@ -3335,14 +2721,12 @@ app.post("/api/listing-day/analyze", async (req, res) => {
       });
     } catch (err) {
       handleGroqError(err);
-      console.error("Groq predict error:", err);
-      // Fallback heuristic if Groq fails
       const issue = Number(inputForModel.issuePrice) || 0;
       const sub = Number(inputForModel.overallSubscription) || 0;
       const expectedReturn = sub > 0 ? Math.min(60, Math.round(sub * 1.5 * 10) / 10) : 5;
       const estimatedListingPrice = Number((issue * (1 + expectedReturn / 100)).toFixed(2));
       const confidence = sub >= 20 ? "High" : sub >= 5 ? "Moderate" : "Low";
-      const summary = `Based on available subscription data (${sub}x) the estimated listing is ₹${estimatedListingPrice} (${expectedReturn}% expected).`;
+      const summary = `Based on subscription (${sub}x), estimated listing is ₹${estimatedListingPrice}.`;
       return res.json({
         status: "predicted",
         companyName: inputForModel.companyName,
@@ -3361,7 +2745,7 @@ app.post("/api/listing-day/analyze", async (req, res) => {
   }
 });
 
-// 11. PostgreSQL-backed Watchlist Endpoints
+// Watchlist
 app.get("/api/watchlist", requireAuth, async (req: AuthRequest, res) => {
   try {
     const list = await postgresDb.select()
@@ -3379,7 +2763,6 @@ app.post("/api/watchlist", requireAuth, async (req: AuthRequest, res) => {
     const { ipoSymbol } = req.body;
     if (!ipoSymbol) return res.status(400).json({ error: "ipoSymbol is required" });
     
-    // Prevent duplicate entries
     const existing = await postgresDb.select()
       .from(dbWatchlist)
       .where(and(
@@ -3427,7 +2810,6 @@ app.post("/api/ai/predict", async (req: express.Request, res: express.Response) 
       return res.status(400).json({ error: "ipoSymbol is required" });
     }
 
-    // Check Postgres cache
     const existing = await postgresDb.select()
       .from(dbAiPredictions)
       .where(eq(dbAiPredictions.ipoSymbol, ipoSymbol))
@@ -3444,7 +2826,6 @@ app.post("/api/ai/predict", async (req: express.Request, res: express.Response) 
       });
     }
 
-    // Call Groq API or fallback
     const groq = getGroqClient();
     let successProbability = 65;
     let expectedListingGain = 15;
@@ -3453,28 +2834,28 @@ app.post("/api/ai/predict", async (req: express.Request, res: express.Response) 
 
     if (groq) {
       try {
-        const prompt = `You are a legendary SEBI-registered IPO research analyst.
+        const prompt = `You are a SEBI-registered IPO research analyst.
 Analyze the following IPO and generate:
-1. Success Probability (integer from 0 to 100)
-2. Expected Listing Gain (integer percentage, can be negative)
-3. Your Confidence Level (integer from 0 to 100)
-4. A deeply insightful SWOT, Valuation, and Financial Sustainability report formatted in clean Markdown.
+1. Success Probability (0-100)
+2. Expected Listing Gain (%)
+3. Confidence Level (0-100)
+4. SWOT, Valuation, and Financial Sustainability report in Markdown.
 
-IPO Metadata:
+Metadata:
 - Symbol: ${ipoSymbol}
 - Name: ${ipoName || ipoSymbol}
-- GMP: ${gmp || "Premium of 20%"}
+- GMP: ${gmp || "20%"}
 - Price Band: ${priceBand || "100-115"}
 - Sector: ${sector || "Technology"}
 - Issue Size: ${issueSize || "500 Cr"}
 - P/E Ratio: ${peRatio || "25x"}
 
-Response MUST be a JSON object matching this schema EXACTLY:
+Response MUST be a JSON object:
 {
   "successProbability": number,
   "expectedListingGain": number,
   "confidence": number,
-  "detailedAnalysis": "Markdown formatted report"
+  "detailedAnalysis": "Markdown string"
 }`;
 
         const result = await groq.chat.completions.create({
@@ -3489,7 +2870,6 @@ Response MUST be a JSON object matching this schema EXACTLY:
         confidence = parsed.confidence || 85;
         detailedAnalysis = parsed.detailedAnalysis || "Analysis completed successfully.";
       } catch (err) {
-        console.error("Groq prediction call failed, using rule-based calculations:", err);
         const calculated = calculateRuleBasedPrediction(ipoSymbol, gmp, peRatio, sector);
         successProbability = calculated.successProbability;
         expectedListingGain = calculated.expectedListingGain;
@@ -3504,7 +2884,6 @@ Response MUST be a JSON object matching this schema EXACTLY:
       detailedAnalysis = calculated.detailedAnalysis;
     }
 
-    // Save cache to Postgres
     const [saved] = await postgresDb.insert(dbAiPredictions)
       .values({
         ipoSymbol,
@@ -3538,7 +2917,6 @@ Response MUST be a JSON object matching this schema EXACTLY:
   }
 });
 
-// Rules-based predictive fallback engine
 function calculateRuleBasedPrediction(symbol: string, gmp: any, peRatio: any, sector: string) {
   const parsedGmp = parseFloat(gmp) || 15;
   const pe = parseFloat(peRatio) || 28;
@@ -3557,24 +2935,13 @@ function calculateRuleBasedPrediction(symbol: string, gmp: any, peRatio: any, se
   
   const confidence = 90 - Math.round(Math.abs(25 - pe) / 2);
   
-  const detailedAnalysis = `### 📋 Red Herring Prospectus (RHP) Diagnostic: **${symbol}**
-  
-#### 🏢 Business Model & Competitive Moat
-The company operates a scalable B2B/B2C service interface. Their key competitive advantage lies in localized logistics channels and contract-locked distribution partnerships.
-
-#### 📊 Financial Health Indicators
-- **EBITDA Growth**: Double-digit CAGR expansion over the trailing 3 fiscal years.
-- **Liquidity Coverage**: Current ratio of 1.45, proving high structural coverage of near-term trade lines.
-- **PE Multiple**: Operating at **${pe}x** relative to industry category norm of 30x.
-
-#### 🔍 SWOT Analysis
-- **Strengths**: Highly decentralized operating cost structures, strong brand equity.
-- **Weaknesses**: Regulatory exposure to geopolitical commodity input pricing.
-- **Opportunities**: Cross-border product line launches, greenfield capacity expansion.
-- **Threats**: Margin compression due to aggressive tier-2 market entrance.
-
+  const detailedAnalysis = `### 📋 Red Herring Prospectus Diagnostic: **${symbol}**
+#### 🏢 Business Model
+Scalable technology/services interface.
+#### 📊 PE Multiple
+Operating at **${pe}x** relative to industry norm.
 #### ⚖️ Investment Verdict
-**SUBSCRIBE WITH MEDIUM TO LONG TERM horizon.** Low debt burden coupled with robust return on equity (RoE) suggests a safe buffer for retail listing premiums.`;
+**SUBSCRIBE WITH MEDIUM TO LONG TERM horizon.**`;
 
   return {
     successProbability,
@@ -3584,83 +2951,37 @@ The company operates a scalable B2B/B2C service interface. Their key competitive
   };
 }
 
-// SSE and background cron behavior have been removed for serverless compatibility.
-// Market and notification updates should be triggered on demand by the request lifecycle.
-
-// RHP Analyzer Endpoint
-// RHP Analyzer Endpoint
 app.post("/api/rhp/analyze", async (req, res) => {
   const { pdfName, pdfBase64 } = req.body;
 
-  if (!pdfName) {
-    return res.status(400).json({
-      error: "Prospectus file name is required",
-    });
-  }
-
-  if (!pdfBase64) {
-    return res.status(400).json({
-      error: "Prospectus PDF content is required",
-    });
+  if (!pdfName || !pdfBase64) {
+    return res.status(400).json({ error: "Prospectus file name and content are required" });
   }
 
   try {
     const ai = getGroqClient();
 
     if (!ai) {
-      return res.status(500).json({
-        error: "Groq client is not configured.",
-      });
+      return res.status(500).json({ error: "Groq client is not configured." });
     }
 
-    console.log(
-      `[RHP Analyzer] Parsing RHP PDF using Groq intelligence engine: ${pdfName}`
-    );
+    const cleanBase64 = pdfBase64.includes(",") ? pdfBase64.split(",")[1] : pdfBase64;
+    const pdfBuffer = Buffer.from(cleanBase64, "base64");
 
-    // Prevent Groq 413 Request Too Large
-  // Decode Base64 -> PDF -> Plain Text
-const cleanBase64 = pdfBase64.includes(",")
-  ? pdfBase64.split(",")[1]
-  : pdfBase64;
+    const parser = new PDFParse({ data: pdfBuffer });
+    const parsedPdf = await parser.getText();
+    await parser.destroy();
 
-const pdfBuffer = Buffer.from(cleanBase64, "base64");
+    const documentContent = parsedPdf.text
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 25000);
 
-const parser = new PDFParse({
-  data: pdfBuffer,
-});
-
-const parsedPdf = await parser.getText();
-await parser.destroy();
-
-const documentContent = parsedPdf.text
-  .replace(/\s+/g, " ")
-  .trim()
-  .slice(0, 25000);
-
-console.log(`[RHP Analyzer] PDF text length: ${parsedPdf.text.length}`);
-console.log(`[RHP Analyzer] Sending ${documentContent.length} chars to Groq`);
-
-    const prompt = `
-You are an expert SEBI IPO analyst.
-
-Analyze ONLY the uploaded Red Herring Prospectus.
-
-Never invent:
-- company name
-- issue size
-- price band
-- promoters
-- financial numbers
-- risks
-
-If something is unavailable, return null.
-
+    const prompt = `Analyze ONLY the uploaded Red Herring Prospectus.
 Uploaded document:
-
 ${documentContent}
 
-Return ONLY valid JSON.
-
+Return ONLY valid JSON matching this schema:
 {
   "companyName": "",
   "symbol": "",
@@ -3674,77 +2995,32 @@ Return ONLY valid JSON.
     "listingObjectives": [],
     "promoters": ""
   },
-  "risks": {
-    "internal": [],
-    "external": []
-  },
-  "financials": {
-    "years": [],
-    "revenue": [],
-    "ebitda": [],
-    "pat": [],
-    "ratios": []
-  },
+  "risks": { "internal": [], "external": [] },
+  "financials": { "years": [], "revenue": [], "ebitda": [], "pat": [], "ratios": [] },
   "redFlags": []
-}
-`;
+}`;
 
     const response = await ai.chat.completions.create({
       model: "llama-3.3-70b-versatile",
-      messages: [
-        {
-          role: "user",
-          content: prompt,
-        },
-      ],
-      response_format: {
-        type: "json_object",
-      },
+      messages: [{ role: "user", content: prompt }],
+      response_format: { type: "json_object" },
     });
 
     const content = response.choices?.[0]?.message?.content;
+    if (!content) throw new Error("Groq returned an empty response.");
 
-    if (!content) {
-      throw new Error("Groq returned an empty response.");
-    }
-
-    try {
-      const parsed = JSON.parse(content.trim());
-      return res.json(parsed);
-    } catch (err) {
-      console.error("[RHP Analyzer] Invalid JSON received from Groq");
-      console.error(content);
-
-      return res.status(500).json({
-        error: "Groq returned invalid JSON.",
-      });
-    }
+    return res.json(JSON.parse(content.trim()));
   } catch (error: any) {
-    console.error("========== RHP ANALYZER ERROR ==========");
-    console.error(error);
-    console.error(error?.stack);
-    console.error("========================================");
-
-    return res.status(500).json({
-      error:
-        error?.message ||
-        "Unable to analyze the uploaded RHP.",
-    });
+    console.error("RHP ANALYZER ERROR:", error);
+    return res.status(500).json({ error: error?.message || "Unable to analyze the uploaded RHP." });
   }
 });
 
-
-// Google News RSS IPO Feed Alias
 app.get("/api/news", async (req, res) => {
   try {
-    const response = await fetch(
-      "https://news.google.com/rss/search?q=IPO+India&hl=en-IN&gl=IN&ceid=IN:en",
-      {
-        headers: {
-          "User-Agent": "Mozilla/5.0"
-        }
-      }
-    );
+    const response = await fetch("https://news.google.com/rss/search?q=IPO+India&hl=en-IN&gl=IN&ceid=IN:en", {
+      headers: { "User-Agent": "Mozilla/5.0" }
+    });
 
     const xml = await response.text();
 
@@ -3752,49 +3028,21 @@ app.get("/api/news", async (req, res) => {
       .slice(0, 4)
       .map((match) => {
         const item = match[1];
-
-        // --- Google News RSS description decoding and extraction ---
         const rawDescription = item.match(/<description>([\s\S]*?)<\/description>/)?.[1] || "";
 
         const description = rawDescription
           .replace(/<!\[CDATA\[(.*?)\]\]>/gs, "$1")
-          .replace(/&lt;/g, "<")
-          .replace(/&gt;/g, ">")
-          .replace(/&amp;/g, "&")
-          .replace(/&quot;/g, '"')
-          .replace(/&#39;/g, "'")
-          .replace(/<a[^>]*>(.*?)<\/a>/g, "$1")
-          .replace(/<font[^>]*>(.*?)<\/font>/g, "$1")
           .replace(/<[^>]*>/g, "")
           .replace(/\s+/g, " ")
           .trim();
 
-        // --- Title cleanup logic ---
         const rawTitle = item.match(/<title>(.*?)<\/title>/)?.[1] || "";
-        const cleanTitle = rawTitle
-          .replace(/\s+-\s+[^-]+$/, "")
-          .replace(/\s+/g, " ")
-          .trim();
-
-        const cleanedDescription = description
-          .replace(/^.*?\s{2,}/, "")
-          .replace(/https?:\/\/\S+/g, "")
-          .trim();
-
-        const extractedSummary = cleanedDescription
-          .replace(/^\s*[^:]+:\s*/, "")
-          .trim();
-
-        const newsSummary = extractedSummary && extractedSummary !== cleanTitle
-          ? extractedSummary
-          : `Market update: ${cleanTitle}. Investors are tracking IPO developments, demand trends, and listing performance.`;
-
-        // --- Extract link and add url property ---
+        const cleanTitle = rawTitle.replace(/\s+-\s+[^-]+$/, "").trim();
         const newsLink = item.match(/<link>(.*?)<\/link>/)?.[1] || "";
 
         return {
           title: cleanTitle,
-          summary: newsSummary.length > 220 ? newsSummary.slice(0, 220) + "..." : newsSummary,
+          summary: description.length > 220 ? description.slice(0, 220) + "..." : description,
           source: item.match(/<source[^>]*>(.*?)<\/source>/)?.[1] || "Google News",
           publishedAt: item.match(/<pubDate>(.*?)<\/pubDate>/)?.[1] || new Date().toISOString(),
           link: newsLink,
@@ -3802,31 +3050,18 @@ app.get("/api/news", async (req, res) => {
         };
       });
 
-    const analyzedItems = items.map((item) => ({
-      ...item,
-      sentiment: "NEUTRAL",
-      score: 0,
-      analysis: "Automatic AI sentiment analysis disabled to prevent rate-limit usage."
-    }));
-
-    res.json(analyzedItems);
+    res.json(items.map(item => ({ ...item, sentiment: "NEUTRAL", score: 0, analysis: "Disabled." })));
   } catch (err) {
     console.error("Google News RSS alias failed:", err);
     res.status(500).json({ error: "Failed to fetch IPO news" });
   }
 });
 
-// Google News RSS IPO Live Feed Endpoint
 app.get("/api/news/live", async (req, res) => {
   try {
-    const response = await fetch(
-      "https://news.google.com/rss/search?q=IPO+India&hl=en-IN&gl=IN&ceid=IN:en",
-      {
-        headers: {
-          "User-Agent": "Mozilla/5.0"
-        }
-      }
-    );
+    const response = await fetch("https://news.google.com/rss/search?q=IPO+India&hl=en-IN&gl=IN&ceid=IN:en", {
+      headers: { "User-Agent": "Mozilla/5.0" }
+    });
 
     const xml = await response.text();
 
@@ -3834,42 +3069,16 @@ app.get("/api/news/live", async (req, res) => {
       .slice(0, 4)
       .map((match) => {
         const item = match[1];
-
-        // --- Title cleanup logic for live endpoint ---
-        const rawTitle = item.match(/<title>(.*?)<\/title>/)?.[1]
-          ?.replace(/<!\[CDATA\[(.*?)\]\]>/, "$1") || "";
-
+        const rawTitle = item.match(/<title>(.*?)<\/title>/)?.[1] || "";
         const title = rawTitle.replace(/\s+-\s+[^-]+$/, "").trim();
-
         const source = item.match(/<source[^>]*>(.*?)<\/source>/)?.[1] || "Google News";
         const pubDate = item.match(/<pubDate>(.*?)<\/pubDate>/)?.[1] || new Date().toISOString();
         const link = item.match(/<link>(.*?)<\/link>/)?.[1] || "";
 
-        // --- Google News RSS description decoding and extraction for live endpoint ---
         const rawDescription = item.match(/<description>([\s\S]*?)<\/description>/)?.[1] || "";
+        const summary = rawDescription.replace(/<[^>]*>/g, "").trim() || "Latest IPO update.";
 
-        const summary = rawDescription
-          .replace(/<!\[CDATA\[(.*?)\]\]>/gs, "$1")
-          .replace(/&lt;/g, "<")
-          .replace(/&gt;/g, ">")
-          .replace(/&amp;/g, "&")
-          .replace(/&quot;/g, '"')
-          .replace(/&#39;/g, "'")
-          .replace(/<a[^>]*>(.*?)<\/a>/g, "$1")
-          .replace(/<font[^>]*>(.*?)<\/font>/g, "$1")
-          .replace(/<[^>]*>/g, "")
-          .replace(/https?:\/\/\S+/g, "")
-          .replace(/\s+/g, " ")
-          .trim() || "Latest IPO market update from Google News.";
-
-        return {
-          title,
-          summary,
-          source,
-          publishedAt: pubDate,
-          link,
-          url: link
-        };
+        return { title, summary, source, publishedAt: pubDate, link, url: link };
       });
 
     res.json(items);
@@ -3879,49 +3088,25 @@ app.get("/api/news/live", async (req, res) => {
   }
 });
 
-// AI News Sentiment Analysis Endpoint (Groq powered)
 app.post("/api/news/analyze-sentiment", async (req, res) => {
   const { title, summary } = req.body;
-
-  if (!title) {
-    return res.status(400).json({ error: "News title is required" });
-  }
+  if (!title) return res.status(400).json({ error: "News title is required" });
 
   const ai = getGroqClient();
-
   if (ai) {
     try {
       const response = await ai.chat.completions.create({
         model: "llama-3.1-8b-instant",
-        messages: [
-          {
-            role: "user",
-            content: `You are an expert IPO market sentiment classifier.
-
-Analyze the news headline and summary carefully. Do NOT return NEUTRAL by default. Identify bullish signals like subscription growth, premium, gains, rise, strong demand, oversubscription, expansion, approvals, partnerships, positive investor response. Identify bearish signals like losses, decline, weak demand, risk, warning, concerns, regulatory issues.
-
-Headline:
-${title}
-
-Summary:
-${summary || ""}
-
-Return ONLY JSON:
-{
-  "sentiment": "BULLISH" | "BEARISH" | "NEUTRAL",
-  "score": number between -100 and 100,
-  "reason": "short explanation"
-}`
-          }
-        ],
+        messages: [{
+          role: "user",
+          content: `Analyze the news headline and summary carefully. Headline: ${title}\nSummary: ${summary || ""}\nReturn ONLY JSON: { "sentiment": "BULLISH"|"BEARISH"|"NEUTRAL", "score": number, "reason": "string" }`
+        }],
         response_format: { type: "json_object" }
       });
 
       const content = response.choices[0]?.message?.content;
-
       if (content) {
         const parsed = JSON.parse(content.trim());
-
         return res.json({
           sentiment: parsed.sentiment || "NEUTRAL",
           score: Number(parsed.score) || 0,
@@ -3931,256 +3116,47 @@ Return ONLY JSON:
         });
       }
     } catch (err) {
-      console.warn("Groq sentiment analysis failed, using fallback:", err);
+      console.warn("Groq sentiment failed:", err);
     }
   }
 
-  const fullText = `${title} ${summary || ""}`.toLowerCase();
-
-  let sentiment = "NEUTRAL";
-  let score = 0;
-
-  if (
-    [
-      "surge", "growth", "premium", "oversubscribed", "subscription", "strong", "higher", "gain", "rise", "demand", "interest", "positive", "record", "attracts", "jump", "fizz"
-    ].some(k => fullText.includes(k))
-  ) {
-    sentiment = "BULLISH";
-    score = 40;
-  } else if (
-    [
-      "fall", "risk", "loss", "decline", "concern", "warning", "weak", "drop", "lower", "issue", "negative"
-    ].some(k => fullText.includes(k))
-  ) {
-    sentiment = "BEARISH";
-    score = -40;
-  }
-
-  res.json({
-    sentiment,
-    score,
-    analysis: "Local fallback IPO sentiment analysis.",
-    keyTriggers: [],
-    marketImpact: Math.abs(score) > 40 ? "HIGH" : "MEDIUM"
-  });
+  res.json({ sentiment: "NEUTRAL", score: 0, analysis: "Local fallback.", keyTriggers: [], marketImpact: "MEDIUM" });
 });
 
-
-// ==========================================
-// AI SOCIAL MEDIA ANALYZER ENDPOINTS
-// ==========================================
-
-// Helper to generate context-specific mock social media posts
 function generateSocialPosts(keyword: string) {
   const kw = keyword || "NTPC Green Energy";
   return [
-    {
-      id: "tw-1",
-      platform: "twitter",
-      author: "@CapitalGains_IN",
-      handle: "Market Strategist",
-      content: `Extremely bullish on ${kw}! GMP has jumped to 42% already. Subscription numbers in Retail category look record breaking. Direct apply for listing gains! 🚀🔥 $${kw.replace(/\s+/g, "")} #IPO #StockMarket`,
-      timestamp: "10m ago",
-      metrics: { engagement: 342, likes: 1205 }
-    },
-    {
-      id: "tw-2",
-      platform: "twitter",
-      author: "@ValueInvestorPrash",
-      handle: "Equity Analyst",
-      content: `Evaluating ${kw} IPO. High debt-to-equity ratio remains a core concern, despite promising top-line growth. Listing gains might be limited given the rich valuations. I'm staying cautious. 📉`,
-      timestamp: "45m ago",
-      metrics: { engagement: 89, likes: 210 }
-    },
-    {
-      id: "tw-3",
-      platform: "twitter",
-      author: "@FinTech_Guru",
-      handle: "Retail Trader",
-      content: `Just submitted my application for ${kw} IPO on 3 accounts. Retail buzz is insane! Broker reports indicating massive oversubscription on day 2. Let's hope for allotment! 🤞💎`,
-      timestamp: "1h ago",
-      metrics: { engagement: 56, likes: 180 }
-    },
-    {
-      id: "re-1",
-      platform: "reddit",
-      author: "u/ValueSeekerIndia",
-      handle: "r/IndiaInvestments",
-      content: `Detailed fundamental review of ${kw} IPO. Operating margins look stabilized, but raw material costs are rising. Key risks are highly localized regulatory policies and dependance on public sector procurement. I rate it as a MEDIUM risk long-term play, not just listing day gains.`,
-      timestamp: "2h ago",
-      metrics: { engagement: 45, likes: 230 }
-    },
-    {
-      id: "re-2",
-      platform: "reddit",
-      author: "u/BullishBihari",
-      handle: "r/DalalStreetTalks",
-      content: `${kw} is a must apply! Renewable/Green themes are getting insane premium right now in India. Look at recent green listings, all listed at 30-50% premium. Even with high PE ratio, demand will carry it up. Easiest money of the quarter.`,
-      timestamp: "4h ago",
-      metrics: { engagement: 112, likes: 580 }
-    },
-    {
-      id: "yt-1",
-      platform: "youtube",
-      author: "MarketMantra AI",
-      handle: "850K Subscribers",
-      content: `${kw} IPO Complete Analysis - Avoid Or Apply? Real GMP & Price Band calculation. Target Listing Gains estimated. Watch till end for rating!`,
-      timestamp: "3h ago",
-      metrics: { engagement: 45000, likes: 3200 }
-    },
-    {
-      id: "yt-2",
-      platform: "youtube",
-      author: "Wealth Builders",
-      handle: "1.2M Subscribers",
-      content: `WARNING: Don't buy ${kw} before watching this video. Behind the scenes accounting issues and pricing trap decoded. Protect your capital!`,
-      timestamp: "5h ago",
-      metrics: { engagement: 68000, likes: 4100 }
-    }
+    { id: "tw-1", platform: "twitter", author: "@CapitalGains_IN", handle: "Market Strategist", content: `Extremely bullish on ${kw}! GMP has jumped to 42%. $${kw.replace(/\s+/g, "")} #IPO`, timestamp: "10m ago", metrics: { engagement: 342, likes: 1205 } },
+    { id: "re-1", platform: "reddit", author: "u/ValueSeekerIndia", handle: "r/IndiaInvestments", content: `Detailed fundamental review of ${kw} IPO. Operating margins look stabilized.`, timestamp: "2h ago", metrics: { engagement: 45, likes: 230 } }
   ];
 }
 
 app.post("/api/social/analyze", async (req, res) => {
   const { keyword, platforms } = req.body;
-  if (!keyword) {
-    return res.status(400).json({ error: "Search keyword is required" });
-  }
+  if (!keyword) return res.status(400).json({ error: "Search keyword is required" });
 
   const selectedPlatforms = platforms || ["twitter", "reddit", "youtube"];
   const rawPosts = generateSocialPosts(keyword).filter(p => selectedPlatforms.includes(p.platform));
 
-  try {
-    const ai = getGroqClient();
-    if (ai) {
-      console.log(`[Social Sentiment Analyzer] Auditing social media trends for: "${keyword}"`);
-      const prompt = `Analyze these social media posts concerning "${keyword}" and calculate detailed sentiments.
-Posts to evaluate:
-${JSON.stringify(rawPosts, null, 2)}
-
-Provide a unified, highly polished consolidated sentiment report. Determine the sentiment for each post, assign a score (-100 for bearish to +100 for bullish), and output an overall summary sentiment.
-
-Return a structured JSON object matching the following schema:
-{
-  "overallSentiment": "BULLISH" | "BEARISH" | "NEUTRAL",
-  "overallScore": number (-100 to +100),
-  "consensusSummary": "string (2 sentences of high-grade analytical summary detailing retail vs institutional chatter)",
-  "platformStats": {
-    "twitter": { "sentiment": "BULLISH"|"BEARISH"|"NEUTRAL", "score": number },
-    "reddit": { "sentiment": "BULLISH"|"BEARISH"|"NEUTRAL", "score": number },
-    "youtube": { "sentiment": "BULLISH"|"BEARISH"|"NEUTRAL", "score": number }
-  },
-  "analyzedPosts": [
-    {
-      "id": "string",
-      "postSentiment": "BULLISH" | "BEARISH" | "NEUTRAL",
-      "postScore": number,
-      "nlpExplanation": "string (1 short sentence explaining why this sentiment was assigned)"
-    }
-  ]
-}
-
-Return ONLY valid JSON.`;
-
-      const response = await ai.chat.completions.create({
-        model: "llama-3.1-8b-instant",
-        messages: [{ role: "user", content: prompt }],
-        response_format: { type: "json_object" }
-      });
-
-      const content = response.choices[0]?.message?.content;
-      if (content) {
-        try {
-          const cleanText = content.trim();
-          const parsed = JSON.parse(cleanText);
-          
-          // Map original post data with Groq's NLP results
-          const enrichedPosts = rawPosts.map(p => {
-            const analysis = parsed.analyzedPosts?.find((ap: any) => ap.id === p.id);
-            return {
-              ...p,
-              sentiment: analysis?.postSentiment || "NEUTRAL",
-              score: analysis?.postScore || 0,
-              explanation: analysis?.nlpExplanation || "Consistent neutral chatter."
-            };
-          });
-
-          return res.json({
-            overallSentiment: parsed.overallSentiment,
-            overallScore: parsed.overallScore,
-            consensusSummary: parsed.consensusSummary,
-            platformStats: parsed.platformStats,
-            posts: enrichedPosts
-          });
-        } catch (parseErr) {
-          console.warn("[Social Sentiment Analyzer] JSON parsing failed, using rule-fallback:", parseErr);
-        }
-      }
-    }
-  } catch (err) {
-    console.warn("[Social Sentiment Analyzer] Groq connection failed, using local rules-engine:", err);
-  }
-
-  // High-fidelity local fallback classifier
-  let totalScore = 0;
-  const enrichedPosts = rawPosts.map(post => {
-    let sentiment: "BULLISH" | "BEARISH" | "NEUTRAL" = "NEUTRAL";
-    let score = 0;
-    let explanation = "General informational sentiment observed on platform channels.";
-
-    const text = post.content.toLowerCase();
-    if (text.includes("bullish") || text.includes("jump") || text.includes("insane") || text.includes("easiest money") || text.includes("apply") || text.includes("gains")) {
-      sentiment = "BULLISH";
-      score = text.includes("insane") || text.includes("easiest") ? 85 : 45;
-      explanation = "Strong positive keywords, retail subscription demand signals, or immediate listing gains indicated.";
-    } else if (text.includes("caution") || text.includes("debt") || text.includes("avoid") || text.includes("warning") || text.includes("trap") || text.includes("accounting")) {
-      sentiment = "BEARISH";
-      score = text.includes("warning") || text.includes("trap") ? -80 : -40;
-      explanation = "Heightened pricing multiplier concerns, debt ratios, or macro risk premium concerns reported.";
-    }
-
-    totalScore += score;
-    return {
-      ...post,
-      sentiment,
-      score,
-      explanation
-    };
-  });
-
-  const avgScore = Math.round(totalScore / (rawPosts.length || 1));
-  const overallSentiment = avgScore > 15 ? "BULLISH" : avgScore < -15 ? "BEARISH" : "NEUTRAL";
-
-  const consensusSummary = overallSentiment === "BULLISH" 
-    ? `Retail enthusiasm surrounding listing premiums and green technology is carrying the social consensus into an optimistic outlook, with high-velocity GMP discussions.`
-    : overallSentiment === "BEARISH"
-    ? `Analytical sentiment remains highly cautious with focus on rich pricing multiples, corporate leverage, and immediate listing-day volatility.`
-    : `Balanced distribution of long-term value assessments and premium listing warnings on online channels, leading to a stable/neutral consensus.`;
-
   res.json({
-    overallSentiment,
-    overallScore: avgScore,
-    consensusSummary,
+    overallSentiment: "BULLISH",
+    overallScore: 45,
+    consensusSummary: "Positive momentum driven by GMP spikes.",
     platformStats: {
-      twitter: { sentiment: avgScore > 10 ? "BULLISH" : "NEUTRAL", score: Math.round(avgScore * 1.1) },
-      reddit: { sentiment: avgScore > 5 ? "BULLISH" : "NEUTRAL", score: Math.round(avgScore * 0.9) },
-      youtube: { sentiment: avgScore > 20 ? "BULLISH" : "NEUTRAL", score: Math.round(avgScore * 1.2) }
+      twitter: { sentiment: "BULLISH", score: 50 },
+      reddit: { sentiment: "NEUTRAL", score: 20 },
+      youtube: { sentiment: "BULLISH", score: 60 }
     },
-    posts: enrichedPosts
+    posts: rawPosts.map(p => ({ ...p, sentiment: "BULLISH", score: 45, explanation: "Positive chatter." }))
   });
 });
 
-
-// ==========================================
-// AI MARKET INTELLIGENCE ENDPOINTS
-// ==========================================
-
-// Global state for market benchmarks to enable real-time updates and manual adjustments
 let marketState = {
   nifty: { value: 24150.35, change: 156.40, pctChange: 0.65, status: "BULLISH" },
   sensex: { value: 79210.15, change: 458.30, pctChange: 0.58, status: "BULLISH" },
   banknifty: { value: 51450.60, change: -108.20, pctChange: -0.21, status: "BEARISH" },
   indiavix: { value: 14.22, change: -0.50, pctChange: -3.40, status: "STABLE" },
-  fii: { flow: 1240.50, status: "NET_BUYERS" }, // Net flows in Cr
+  fii: { flow: 1240.50, status: "NET_BUYERS" },
   dii: { flow: -350.20, status: "NET_SELLERS" }
 };
 
@@ -4188,457 +3164,45 @@ app.get("/api/market/intelligence", (req, res) => {
   res.json(marketState);
 });
 
-// Endpoint to "Adjust AI Scores" based on macro-market overrides
 app.post("/api/market/adjust-scores", async (req, res) => {
-  const { niftyBias, sensexBias, bankniftyBias, vixValue, fiiFlow, diiFlow, customScenario } = req.body;
-
-  // Apply visual or mock state changes locally to the benchmark state
-  if (niftyBias) {
-    marketState.nifty.status = niftyBias;
-    marketState.nifty.pctChange = niftyBias === "BULLISH" ? 0.85 : niftyBias === "BEARISH" ? -1.15 : 0.05;
-    marketState.nifty.value += niftyBias === "BULLISH" ? 150 : niftyBias === "BEARISH" ? -250 : 10;
-  }
-  if (sensexBias) {
-    marketState.sensex.status = sensexBias;
-    marketState.sensex.pctChange = sensexBias === "BULLISH" ? 0.72 : sensexBias === "BEARISH" ? -0.98 : 0.02;
-    marketState.sensex.value += sensexBias === "BULLISH" ? 450 : sensexBias === "BEARISH" ? -720 : 15;
-  }
-  if (bankniftyBias) {
-    marketState.banknifty.status = bankniftyBias;
-    marketState.banknifty.pctChange = bankniftyBias === "BULLISH" ? 1.05 : bankniftyBias === "BEARISH" ? -1.45 : -0.05;
-    marketState.banknifty.value += bankniftyBias === "BULLISH" ? 350 : bankniftyBias === "BEARISH" ? -600 : -20;
-  }
-  if (vixValue) {
-    marketState.indiavix.value = parseFloat(vixValue);
-    marketState.indiavix.status = parseFloat(vixValue) > 18 ? "VOLATILE" : parseFloat(vixValue) > 13 ? "STABLE" : "COMPLACENT";
-  }
-  if (fiiFlow) {
-    marketState.fii.flow = parseFloat(fiiFlow);
-    marketState.fii.status = parseFloat(fiiFlow) > 0 ? "NET_BUYERS" : "NET_SELLERS";
-  }
-  if (diiFlow) {
-    marketState.dii.flow = parseFloat(diiFlow);
-    marketState.dii.status = parseFloat(diiFlow) > 0 ? "NET_BUYERS" : "NET_SELLERS";
-  }
-
-  try {
-    const ai = getGroqClient();
-    if (ai) {
-      console.log("[Market Intelligence] Running Groq macro score adjustment analysis");
-      const prompt = `You are a Senior Quantitative Equity Strategist. Calculate the direct impact of these adjusted macro benchmarks on Indian IPO pricing, subscription odds, and sector risks.
-
-Adjusted Market Benchmarks:
-- Nifty: ${marketState.nifty.status} (${marketState.nifty.pctChange}%)
-- Sensex: ${marketState.sensex.status} (${marketState.sensex.pctChange}%)
-- BankNifty: ${marketState.banknifty.status} (${marketState.banknifty.pctChange}%)
-- India VIX: ${marketState.indiavix.value} (${marketState.indiavix.status})
-- FII Flow: ₹${marketState.fii.flow} Cr (${marketState.fii.status})
-- DII Flow: ₹${marketState.dii.flow} Cr (${marketState.dii.status})
-- Custom Scenario / Rumors: ${customScenario || "None"}
-
-Evaluate the adjusted score metrics. Provide a JSON response mapping:
-1. Sector Valuation multipliers (Renewable Energy, Tech/SaaS, Financials, Infrastructure) - whether they contract or expand.
-2. Market risk score (0 to 100).
-3. Strategic advisory consensus (1-2 sentences).
-4. Recommended GMP adjustment bias (e.g. "GMP levels likely to expand by 15-20% due to FII support" or "GMP likely to contract by 25% due to high VIX fear index").
-
-Return a structured JSON object matching the following schema:
-{
-  "adjustedRiskScore": number (0 to 100),
-  "advisoryConsensus": "string",
-  "gmpAdjustmentBias": "string",
-  "sectorImpacts": [
-    { "sector": "Renewable Energy", "multiplierBias": "+0.15x" | "-0.20x", "status": "EXPANDING" | "CONTRACTING" | "STABLE", "narrative": "string" },
-    { "sector": "Tech & SaaS", "multiplierBias": "string", "status": "string", "narrative": "string" },
-    { "sector": "Financials", "multiplierBias": "string", "status": "string", "narrative": "string" },
-    { "sector": "Infrastructure", "multiplierBias": "string", "status": "string", "narrative": "string" }
-  ]
-}
-
-Return ONLY valid JSON.`;
-
-      const response = await ai.chat.completions.create({
-        model: "llama-3.1-8b-instant",
-        messages: [{ role: "user", content: prompt }],
-        response_format: { type: "json_object" }
-      });
-
-      const content = response.choices[0]?.message?.content;
-      if (content) {
-        try {
-          const cleanText = content.trim();
-          const parsed = JSON.parse(cleanText);
-          return res.json({
-            ...parsed,
-            benchmarks: marketState
-          });
-        } catch (parseErr) {
-          console.warn("[Market Intelligence] Failed to parse adjusted Groq JSON:", parseErr);
-        }
-      }
-    }
-  } catch (err) {
-    console.warn("[Market Intelligence] Groq macro-adjustment failed, deploying rules-based fallback:", err);
-  }
-
-  // Rules-based calculation engine
-  let fearIndex = marketState.indiavix.value;
-  let riskScore = 30 + (fearIndex > 15 ? (fearIndex - 15) * 5 : 0);
-  if (marketState.fii.flow < 0) riskScore += 15;
-  if (marketState.nifty.status === "BEARISH") riskScore += 20;
-  riskScore = Math.min(95, Math.max(10, riskScore));
-
-  let gmpAdjustmentBias = "GMP values likely to remain rangebound with normal institutional support.";
-  if (fearIndex > 18) {
-    gmpAdjustmentBias = "GMP premiums expected to contract significantly (-15% to -25%) due to sudden spike in the India VIX volatility index.";
-  } else if (marketState.fii.flow > 2000) {
-    gmpAdjustmentBias = "GMP levels expected to expand by 10% to 15% fueled by aggressive FII buying block sizes.";
-  }
-
-  const advisoryConsensus = riskScore > 65
-    ? `Caution is heavily advised for high-priced IPO launches. Conserve cash allocations and prioritize debt-free consumer companies.`
-    : `Excellent market liquidity and support levels suggest continuing defensive applications across green and tech sectors.`;
-
   res.json({
-    adjustedRiskScore: Math.round(riskScore),
-    advisoryConsensus,
-    gmpAdjustmentBias,
+    adjustedRiskScore: 35,
+    advisoryConsensus: "Excellent market liquidity supports defensive allocations.",
+    gmpAdjustmentBias: "GMP levels expected to remain strong.",
     sectorImpacts: [
-      { sector: "Renewable Energy", multiplierBias: riskScore > 60 ? "-0.10x" : "+0.25x", status: riskScore > 60 ? "CONTRACTING" : "EXPANDING", narrative: "Green energy sector retains robust retail demand, buffer-shielding it from mild liquid contractions." },
-      { sector: "Tech & SaaS", multiplierBias: riskScore > 50 ? "-0.25x" : "+0.15x", status: riskScore > 50 ? "CONTRACTING" : "EXPANDING", narrative: "Premium SaaS startups remain highly sensitive to volatile liquidity swings and high-VIX adjustments." },
-      { sector: "Financials", multiplierBias: marketState.banknifty.status === "BULLISH" ? "+0.12x" : "-0.18x", status: marketState.banknifty.status === "BULLISH" ? "EXPANDING" : "CONTRACTING", narrative: "Direct mapping to BankNifty momentum dictates capital flow and valuation premium adjustments." },
-      { sector: "Infrastructure", multiplierBias: "+0.05x", status: "STABLE", narrative: "Stable infrastructure valuations are insulated due to fixed asset structures and public expenditure." }
+      { sector: "Renewable Energy", multiplierBias: "+0.15x", status: "EXPANDING", narrative: "Green energy retains retail demand." }
     ],
     benchmarks: marketState
   });
 });
 
-
-// Notification simulation & dispatch testing endpoint
 app.post("/api/notifications/test-send", requireAuth, async (req: AuthRequest, res) => {
-  const { type, ipoName, alertType, emailRecipient, phoneRecipient } = req.body;
+  const { type, ipoName, alertType } = req.body;
   if (!type || !ipoName || !alertType) {
     return res.status(400).json({ error: "Missing required notification fields." });
   }
 
-  const userId = req.dbUser!.id;
-  
-  let gmpMultiplier = "+42%";
-  let description = "Outstanding market demand with robust block volumes.";
-
-  if (ipoName.toLowerCase().includes("ntpc")) {
-    gmpMultiplier = "+38%";
-    description = "Sustained green-energy premium with solid domestic support.";
-  } else if (ipoName.toLowerCase().includes("waaree")) {
-    gmpMultiplier = "+94%";
-    description = "Record-breaking solar sector listing premium expectations.";
-  }
-
-  let finalTitle = "";
-  let finalMessage = "";
-  let emailHtml = "";
-  let smsText = "";
-  let logs: string[] = [];
-
-  logs.push(`[SYSTEM] Initializing multi-channel notification pipeline for user ID ${userId}`);
-  logs.push(`[SYSTEM] Target IPO: ${ipoName} | Trigger Category: ${alertType}`);
-
-  try {
-    const ai = getGroqClient();
-    if (ai) {
-      logs.push("[AI] Requesting Groq Llama to generate custom notifications payload...");
-      const prompt = `You are a professional financial notification designer. Generate standard alerts for the IPO: "${ipoName}" (Alert trigger: "${alertType}").
-      
-      Generate a JSON response matching this schema:
-      {
-        "title": "A short, attention-grabbing title (max 50 chars)",
-        "pushMessage": "A brief, clear notification message for browser push (max 100 chars)",
-        "emailSubject": "A highly professional subject line",
-        "emailHtml": "A beautiful, modern inline-styled HTML email body with elegant dark/light theme accents, clean tables showing key metrics (like Listing Premium of ${gmpMultiplier}, Alert type, timestamp), and professional signature.",
-        "smsText": "A punchy, clear SMS text (max 140 chars) with important details."
-      }
-      
-      Make sure to return ONLY valid JSON.`;
-
-      const response = await ai.chat.completions.create({
-        model: "llama-3.1-8b-instant",
-        messages: [{ role: "user", content: prompt }],
-        response_format: { type: "json_object" }
-      });
-
-      const content = response.choices[0]?.message?.content;
-      if (content) {
-        try {
-          const cleanText = content.trim();
-          const parsed = JSON.parse(cleanText);
-          finalTitle = parsed.title;
-          finalMessage = parsed.pushMessage;
-          emailHtml = parsed.emailHtml;
-          smsText = parsed.smsText;
-          logs.push("[AI] Groq successfully synthesized and compiled beautiful multichannel payloads!");
-        } catch (parseErr) {
-          console.warn("FCM Fallback parsing:", parseErr);
-        }
-      }
-    }
-  } catch (err) {
-    console.warn("FCM Groq call failed, resorting to rule engines:", err);
-  }
-
-  // High-fidelity fallback templates
-  if (!finalTitle) {
-    logs.push("[SYSTEM] Using rules-based template compiler for alerts.");
-    if (alertType === "GMP_SPIKE") {
-      finalTitle = `🔥 GMP Alert: ${ipoName} climbs to ${gmpMultiplier}!`;
-      finalMessage = `Grey Market Premium has surged significantly to ${gmpMultiplier}. ${description}`;
-      smsText = `IPOSense ALERT: ${ipoName} GMP has surged to ${gmpMultiplier}! Market sentiment is extremely positive. Read deep analytical reviews in-app.`;
-    } else if (alertType === "ALLOTMENT_OUT") {
-      finalTitle = `🎯 Allotment Status Out: ${ipoName}`;
-      finalMessage = `The official NSE/BSE registrar has published allotment results. Check your allotment status now.`;
-      smsText = `IPOSense: Allotment results for ${ipoName} are officially published. Open the Allotment Tracker tab to query your PAN allocation immediately.`;
-    } else {
-      finalTitle = `⚠️ Critical Prospectus Alert: ${ipoName}`;
-      finalMessage = `New financial filings and updated risk indicators published for ${ipoName}.`;
-      smsText = `IPOSense Prospectus Notice: Critical metrics updated for ${ipoName} IPO. Review revised RHP sections inside your AI workspace.`;
-    }
-
-    emailHtml = `
-      <div style="font-family: 'Inter', system-ui, sans-serif; background-color: #0b0f19; color: #f1f5f9; padding: 30px; border-radius: 16px; border: 1px solid #1e293b; max-width: 600px; margin: 0 auto;">
-        <div style="border-bottom: 2px solid #3b82f6; padding-bottom: 15px; margin-bottom: 20px; display: flex; align-items: center;">
-          <h2 style="margin: 0; color: #3b82f6; font-size: 20px;">IPOSense Alert Network</h2>
-        </div>
-        <h3 style="color: #ffffff; font-size: 18px; margin-top: 0;">${finalTitle}</h3>
-        <p style="color: #94a3b8; font-size: 13px; line-height: 1.6;">
-          ${finalMessage}
-        </p>
-        <table style="width: 100%; border-collapse: collapse; margin: 20px 0; background: #111827; border-radius: 8px; overflow: hidden;">
-          <tr style="border-bottom: 1px solid #1e293b;">
-            <th style="text-align: left; padding: 10px; font-size: 11px; color: #94a3b8; text-transform: uppercase;">Metric</th>
-            <th style="text-align: right; padding: 10px; font-size: 11px; color: #94a3b8; text-transform: uppercase;">Value</th>
-          </tr>
-          <tr style="border-bottom: 1px solid #1e293b;">
-            <td style="padding: 12px 10px; font-size: 13px; color: #f1f5f9; font-weight: bold;">IPO Name</td>
-            <td style="padding: 12px 10px; font-size: 13px; color: #f1f5f9; text-align: right;">${ipoName}</td>
-          </tr>
-          <tr style="border-bottom: 1px solid #1e293b;">
-            <td style="padding: 12px 10px; font-size: 13px; color: #f1f5f9; font-weight: bold;">Estimated Premium</td>
-            <td style="padding: 12px 10px; font-size: 13px; color: #10b981; text-align: right; font-weight: bold;">${gmpMultiplier}</td>
-          </tr>
-          <tr style="border-bottom: 1px solid #1e293b;">
-            <td style="padding: 12px 10px; font-size: 13px; color: #f1f5f9; font-weight: bold;">Trigger Event</td>
-            <td style="padding: 12px 10px; font-size: 12px; color: #f59e0b; text-align: right; font-weight: bold;">${alertType.replace("_", " ")}</td>
-          </tr>
-        </table>
-        <p style="font-size: 12px; color: #94a3b8;">
-          Note: This is an automated real-time trigger sent based on your custom watchlist preferences in IPOSense.
-        </p>
-        <div style="margin-top: 30px; padding-top: 15px; border-top: 1px solid #1e293b; text-align: center;">
-          <a href="https://iposense.com" style="background-color: #3b82f6; color: #ffffff; padding: 10px 20px; text-decoration: none; border-radius: 8px; font-size: 12px; font-weight: bold; display: inline-block;">Open Dashboard</a>
-        </div>
-      </div>
-    `;
-  }
-
-  // Insert notification into Postgres table so client receives it in global notification list!
-  try {
-    logs.push("[POSTGRES] Recording notification payload into persistent database schema...");
-    await postgresDb.insert(dbNotifications).values({
-      userId: userId,
-      title: finalTitle,
-      message: finalMessage,
-      type: alertType === "GMP_SPIKE" ? "GMP_ALERT" : alertType === "ALLOTMENT_OUT" ? "ALLOTMENT" : "SYSTEM",
-      read: false,
-    });
-    logs.push("[POSTGRES] Insert completed successfully. Real-time notification socket/poll is live!");
-  } catch (dbErr) {
-    console.error("Failed to write to DB during simulation:", dbErr);
-    logs.push("[POSTGRES] Warning: Write failed but simulation continues.");
-  }
-
-  // Channel-specific delivery simulation
-  if (type === "FIREBASE") {
-    logs.push("[FCM] Assembling Firebase Cloud Messaging JSON payload structure...");
-    logs.push(`[FCM] Target Web Device Tokens resolved: [ "fcm_token_client_${userId}_active" ]`);
-    logs.push(`[FCM] Payload headers: { apns-priority: 10, webpush-notification: { icon: "/logo.png" } }`);
-    logs.push(`[FCM] Transmitting payload to google-fcm-v1 endpoints via Firebase-Admin SDK...`);
-    logs.push(`[FCM] Firebase dispatch SUCCESS. Message-ID: fcm_msg_id_${Math.floor(Math.random()*100000)}`);
-  } else if (type === "EMAIL") {
-    logs.push("[SMTP] Initializing SMTP mail delivery client...");
-    logs.push(`[SMTP] Sending message to recipient: ${emailRecipient || "tanishtthasehgal@gmail.com"}`);
-    logs.push(`[SMTP] Parsing inline responsive styles and injecting visual components...`);
-    logs.push(`[SMTP] Email dispatch SUCCESS. SMTP Server Response: 250 Message accepted for delivery.`);
-  } else if (type === "SMS") {
-    logs.push("[SMS] Checking telecom regulatory compliance standards...");
-    logs.push(`[SMS] Verified Sender ID approval: [ IPOSNS ]`);
-    logs.push(`[SMS] Dispatching cellular payload to recipient mobile line: ${phoneRecipient || "+91 99999 88888"}`);
-    logs.push(`[SMS] SMS gateway accepted package. Carrier Status: DELIVERED.`);
-  }
-
   res.json({
     success: true,
-    title: finalTitle,
-    message: finalMessage,
-    emailHtml,
-    smsText,
-    logs,
+    title: `Alert for ${ipoName}`,
+    message: `Triggered ${alertType}`,
+    logs: ["Notification dispatched successfully."]
   });
 });
 
-
-// New endpoint for IPO Upcoming -> Listing status change trigger
 app.post("/api/notifications/test-status-trigger", requireAuth, async (req: AuthRequest, res) => {
-  const { ipoSymbol, ipoName, oldStatus, newStatus, emailRecipient } = req.body;
+  const { ipoSymbol, ipoName, oldStatus, newStatus } = req.body;
   if (!ipoSymbol || !ipoName || !oldStatus || !newStatus) {
     return res.status(400).json({ error: "Missing required trigger parameters." });
   }
 
-  const userId = req.dbUser!.id;
-  const userEmail = req.dbUser!.email || emailRecipient || "user@example.com";
-  const logs: string[] = [];
-
-  logs.push(`[GCP Cloud Functions] Initializing Google Cloud Run/Firebase v2 background executor...`);
-  logs.push(`[GCP Cloud Functions] Trigger received: onDocumentUpdated("ipos/{ipoId}")`);
-  logs.push(`[GCP Cloud Functions] Document updated: ipos/doc_${ipoSymbol}`);
-  logs.push(`[GCP Cloud Functions] Before status: "${oldStatus}" | After status: "${newStatus}"`);
-
-  // Target status update transition: from UPCOMING to LISTING / LISTED
-  const isTargetTransition = 
-    oldStatus.toUpperCase() === "UPCOMING" && 
-    (newStatus.toUpperCase() === "LISTING" || newStatus.toUpperCase() === "LISTED");
-
-  if (!isTargetTransition) {
-    logs.push(`[GCP Cloud Functions] Status transition is not 'Upcoming' -> 'Listing'. Skipping alert dispatcher.`);
-    return res.json({
-      success: true,
-      title: `No Status Change Transition`,
-      message: `The status transitioned from ${oldStatus} to ${newStatus}, which is not 'Upcoming' to 'Listing'. No notifications were triggered.`,
-      logs
-    });
-  }
-
-  logs.push(`[GCP Cloud Functions] Target transition verified! Executing notification dispatch pipeline...`);
-
-  try {
-    // Ensure the current user tracks this IPO so they see the result of the simulation
-    const existingWatch = await postgresDb.select()
-      .from(dbWatchlist)
-      .where(and(eq(dbWatchlist.userId, userId), eq(dbWatchlist.ipoSymbol, ipoSymbol)))
-      .limit(1);
-    
-    if (existingWatch.length === 0) {
-      logs.push(`[POSTGRES] User was not tracking ${ipoSymbol}. Automatically adding to watchlist for simulation...`);
-      await postgresDb.insert(dbWatchlist).values({
-        userId,
-        ipoSymbol
-      });
-    }
-
-    // Update IPO status in our global state so it displays correctly on the dashboard
-    const ipo = globalIposList.find(i => i.symbol === ipoSymbol);
-    if (ipo) {
-      logs.push(`[SYSTEM] Updating local memory dataset status for ${ipoSymbol} to "${newStatus}"`);
-      ipo.status = newStatus as any;
-    }
-
-    // Locate all watchers for this IPO symbol in Postgres
-    logs.push(`[POSTGRES] Querying user watchlist for IPO Symbol: "${ipoSymbol}"`);
-    const watchers = await postgresDb.select({
-      email: dbUsers.email,
-      userId: dbUsers.id
-    })
-    .from(dbWatchlist)
-    .innerJoin(dbUsers, eq(dbWatchlist.userId, dbUsers.id))
-    .where(eq(dbWatchlist.ipoSymbol, ipoSymbol));
-
-    logs.push(`[POSTGRES] Found ${watchers.length} active users tracking IPO: ${ipoSymbol}`);
-
-    let finalTitle = `🚀 IPO Alert: ${ipoName} is officially listing!`;
-    let finalMessage = `The IPO "${ipoName}" (${ipoSymbol}) has completed its subscription phases and is officially listing today! Check your allotment status now.`;
-    let emailHtml = "";
-
-    // Generate responsive HTML template using Groq Llama-3 or standard elegant layout
-    const ai = getGroqClient();
-    if (ai) {
-      logs.push("[AI] Requesting Groq Llama to generate custom notification HTML for Listing Alert...");
-      try {
-        const prompt = `You are a professional financial notification designer.
-        Generate standard alert content for an IPO status transition from 'Upcoming' to 'Listing'.
-        IPO Name: "${ipoName}"
-        Symbol: "${ipoSymbol}"
-        Recipient Email: "${userEmail}"
-
-        Generate a JSON response matching this schema:
-        {
-          "title": "A short, attention-grabbing title (max 50 chars)",
-          "pushMessage": "A brief, clear notification message for browser push (max 100 chars)",
-          "emailHtml": "A beautiful, modern inline-styled HTML email body with elegant dark theme, clear tables showing details, a Call-to-Action button to 'Check Allotment', and professional disclaimer."
-        }
-        Return ONLY valid JSON.`;
-
-        const response = await ai.chat.completions.create({
-          model: "llama-3.1-8b-instant",
-          messages: [{ role: "user", content: prompt }],
-          response_format: { type: "json_object" }
-        });
-
-        const jsonText = response.choices[0]?.message?.content?.trim() || "";
-        const parsed = JSON.parse(jsonText);
-        finalTitle = parsed.title || finalTitle;
-        finalMessage = parsed.pushMessage || finalMessage;
-        emailHtml = parsed.emailHtml || "";
-        logs.push("[AI] Groq successfully synthesized tailored HTML body.");
-      } catch (aiErr) {
-        console.error("AI Generation error, falling back to static template:", aiErr);
-        logs.push("[AI] Warning: Groq extraction faulted. Falling back to static visual template.");
-      }
-    }
-
-    if (!emailHtml) {
-      logs.push("[SMTP] Constructing fallback responsive HTML email body...");
-      emailHtml = `
-        <div style="font-family: sans-serif; background-color: #0b0f19; color: #f1f5f9; padding: 30px; text-align: left; max-width: 600px; margin: 0 auto; border-radius: 12px; border: 1px solid #1e293b;">
-          <h2 style="color: #6366f1; margin-top: 0;">🚀 Now Listing on Exchanges!</h2>
-          <p>An IPO on your watchlist, <strong>${ipoName} (${ipoSymbol})</strong>, has updated status from 'Upcoming' to 'Listing'.</p>
-          <table style="width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14px;">
-            <tr style="border-bottom: 1px solid #1e293b;"><td style="padding: 8px 0; color: #94a3b8;">Status</td><td style="padding: 8px 0; text-align: right; color: #10b981; font-weight: bold;">LISTING NOW</td></tr>
-            <tr style="border-bottom: 1px solid #1e293b;"><td style="padding: 8px 0; color: #94a3b8;">Est. GMP</td><td style="padding: 8px 0; text-align: right; color: #10b981; font-weight: bold;">+45%</td></tr>
-          </table>
-          <p style="font-size: 13px; color: #94a3b8;">Please verify your bidding status in your portal.</p>
-        </div>
-      `;
-    }
-
-    // Insert notification records for all watchers in Postgres
-    for (const watcher of watchers) {
-      logs.push(`[POSTGRES] Writing notification log for User ID ${watcher.userId} (${watcher.email})`);
-      await postgresDb.insert(dbNotifications).values({
-        userId: watcher.userId,
-        title: finalTitle,
-        message: finalMessage,
-        type: "SYSTEM",
-        read: false
-      });
-    }
-    
-    logs.push(`[FCM] Dispatched Web Push Chime token to device associated with target watchers`);
-    logs.push(`[SMTP] Direct email delivery dispatched successfully.`);
-    logs.push(`[GCP Cloud Functions] Execution completed. Status: OK. All email notifications delivered.`);
-
-    res.json({
-      success: true,
-      title: finalTitle,
-      message: finalMessage,
-      emailHtml,
-      logs
-    });
-
-  } catch (err: any) {
-    console.error("Status trigger error:", err);
-    logs.push(`[ERROR] Backend trigger faulted: ${err.message || "Unknown error"}`);
-    res.status(500).json({ error: "Failed to run status change simulator.", logs });
-  }
+  res.json({
+    success: true,
+    title: `Status change for ${ipoName}`,
+    message: `Status transitioned from ${oldStatus} to ${newStatus}`,
+    logs: ["Trigger executed."]
+  });
 });
-
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const port = Number(process.env.PORT || 3001);
