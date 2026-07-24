@@ -5,7 +5,7 @@ import { pathToFileURL } from "node:url";
 import Groq from "groq-sdk";
 import { createClient } from "redis";
 import axios from "axios";
-import marketRoutes from "./src/routes/market";
+import marketRoutes from "./src/routes/market.js";
 import * as cheerio from "cheerio";
 import jwt from "jsonwebtoken";
 import { PDFParse } from "pdf-parse";
