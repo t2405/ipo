@@ -9,6 +9,7 @@ export interface IPO {
   id: string;
   name: string;
   symbol: string;
+  companyName?: string;
   logo?: string;
   priceBand: string; // e.g. "₹250 - ₹265"
   minPrice: number;
@@ -42,6 +43,9 @@ export interface IPO {
   objectOfIssue: string;
   financials: IPOFinancial[];
   status: 'UPCOMING' | 'ACTIVE' | 'CLOSED' | 'ALLOTMENT_OUT' | 'LISTED';
+  aiAnalysis?: any;
+  aiSummary?: string;
+  analysis?: any;
 }
 
 export interface Application {
@@ -91,11 +95,12 @@ export interface ListingDayData {
 export interface PortfolioHolding {
   id: string;
   ipoId: string;
-  ipoName: string;
+  ipoName?: string;
   symbol: string;
+  companyName?: string;
   avgCost: number;
   quantity: number;
   currentPrice: number;
-  status: 'HELD' | 'SOLD';
-  realizedPnL: number;
+  status?: 'HELD' | 'SOLD';
+  realizedPnL?: number;
 }

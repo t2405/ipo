@@ -94,7 +94,7 @@ export default function MarketIntelligence() {
       });
       if (!res.ok) throw new Error("Failed to pull market benchmarks.");
       const data = await res.json();
-      const mapped = {
+      const mapped: Benchmarks = {
         nifty: {
           value: data.nifty,
           change: 0,

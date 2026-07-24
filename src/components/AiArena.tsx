@@ -422,7 +422,7 @@ export default function AiArena({ ipos }: ArenaProps) {
                       return (
                         <div key={idx} className="px-2 sm:px-4 text-left text-xs text-muted-foreground">
                           <p className="text-xs sm:text-sm text-foreground leading-relaxed">
-                            {analysis.reasoningSummary || ipo.aiSummary || "Run full AI valuation in Directory tab to pull real-time prospectus summary."}
+                            {(analysis as any).reasoningSummary || (ipo as any).aiSummary || "Run full AI valuation in Directory tab to pull real-time prospectus summary."}
                           </p>
                         </div>
                       );

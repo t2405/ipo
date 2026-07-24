@@ -1,8 +1,7 @@
-import { Router } from "express";
-import { requireAuth } from "../middleware/auth";
+import { Router, Request, Response } from "express";
+import { requireAuth, AuthRequest } from "../middleware/auth";
 
 const router = Router();
-import { Request, Response } from "express";
 import { db } from "../db";
 import { allotmentChecks } from "../db/schema";
 import { eq, desc, and } from "drizzle-orm";
@@ -13,7 +12,7 @@ import {
   checkMufgAllotment,
 } from "../controllers/allotment.controller";
 
-export const getAllotmentHistory = async (req: Request, res: Response) => {
+export const getAllotmentHistory = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.dbUser?.id;
 
@@ -33,7 +32,7 @@ export const getAllotmentHistory = async (req: Request, res: Response) => {
   }
 };
 
-export const deleteAllotmentHistory = async (req: Request, res: Response) => {
+export const deleteAllotmentHistory = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.dbUser?.id;
 

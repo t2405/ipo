@@ -210,7 +210,7 @@ export async function refreshKfintechIpoList(): Promise<KfintechIpoItem[]> {
             nodes.forEach(function (n) {
               try {
                 var el = n;
-                var cid = (el.getAttribute && (el.getAttribute('data-clientid') || el.getAttribute('data-client-id') || el.getAttribute('clientid') || el.getAttribute('client-id'))) || (el.dataset && (el.dataset.clientid || el.dataset.clientId));
+                var cid = (el.getAttribute && (el.getAttribute('data-clientid') || el.getAttribute('data-client-id') || el.getAttribute('clientid') || el.getAttribute('client-id'))) || ((el as HTMLElement & { dataset?: { clientid?: string; clientId?: string } }).dataset && ((el as HTMLElement & { dataset?: { clientid?: string; clientId?: string } }).dataset.clientid || (el as HTMLElement & { dataset?: { clientid?: string; clientId?: string } }).dataset.clientId));
                 var name = (el.textContent && el.textContent.trim()) || '';
                 if (cid && name) results.push({ clientId: cid, name: name });
               } catch (e) {}
@@ -259,7 +259,7 @@ export async function refreshKfintechIpoList(): Promise<KfintechIpoItem[]> {
           var nodes = document.querySelectorAll('[data-clientid], [data-client-id], [clientid], [client-id]');
           nodes.forEach(function (n) {
             try {
-              var el = n;
+              var el = n as HTMLElement & { dataset?: { clientid?: string; clientId?: string } };
               var cid = (el.getAttribute && (el.getAttribute('data-clientid') || el.getAttribute('data-client-id') || el.getAttribute('clientid') || el.getAttribute('client-id'))) || (el.dataset && (el.dataset.clientid || el.dataset.clientId));
               var name = (el.textContent && el.textContent.trim()) || '';
               if (cid && name) results.push({ clientId: cid, name: name });

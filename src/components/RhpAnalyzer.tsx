@@ -656,7 +656,7 @@ export default function RhpAnalyzer() {
                           boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.05)" 
                         }} 
                       />
-                      <Legend style={{ fontSize: "10px" }} />
+                      <Legend />
                       <Bar 
                         dataKey={financialMetric} 
                         name={financialMetric === "revenue" ? "Total Revenue (₹ Cr)" : financialMetric === "ebitda" ? "EBITDA (₹ Cr)" : "Net Profit / PAT (₹ Cr)"}

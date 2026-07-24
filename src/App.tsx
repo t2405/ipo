@@ -791,7 +791,7 @@ const symbols = normalizedHoldings
                   <RhpAnalyzer />
                 )}
                 {activeTab === "news-analyzer" && (
-                  <NewsAnalyzer news={news} />
+                  <NewsAnalyzer />
                 )}
                 {activeTab === "social-analyzer" && (
                   <SocialAnalyzer />

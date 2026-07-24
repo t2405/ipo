@@ -297,7 +297,7 @@ export default function DashboardOverview({
           <div className="bg-primary/5 border border-primary/20 rounded-xl p-3 sm:p-4 space-y-3">
             <div className="flex items-center justify-between border-b border-primary/10 pb-1.5">
               <span className="text-[10px] font-bold uppercase tracking-wider text-primary">Allotment Chance Estimator</span>
-              <HelpCircle className="h-3.5 w-3.5 text-primary cursor-help shrink-0" title="Based on actual subscription multiples and mathematical probability rules." />
+              <HelpCircle className="h-3.5 w-3.5 text-primary cursor-help shrink-0" aria-label="Based on actual subscription multiples and mathematical probability rules." />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px]">
               <div>

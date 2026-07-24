@@ -25,7 +25,7 @@ export async function refreshMufgIpoList(): Promise<MufgIpoItem[]> {
   const body = await response.text();
   const parsed = JSON.parse(body);
   const xml = parsed.d;
-  const parser = new XMLParser({ ignoreAttributes: false, removeNamespacePrefix: true });
+  const parser = new XMLParser({ ignoreAttributes: false, removeNSPrefix: true });
   const parsedXml = parser.parse(xml);
   const rows = parsedXml?.NewDataSet?.Table || [];
   const list = Array.isArray(rows)
@@ -69,7 +69,7 @@ export async function checkMufgAllotmentStatus(companyId: string, pan: string) {
   const parsed = JSON.parse(body);
   const xml = parsed.d || "";
 
-  const parser = new XMLParser({ ignoreAttributes: false, removeNamespacePrefix: true });
+  const parser = new XMLParser({ ignoreAttributes: false, removeNSPrefix: true });
   const parsedXml = parser.parse(xml);
 
   return { provider: "mufg", companyId, pan, response: parsedXml };

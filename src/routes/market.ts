@@ -18,46 +18,32 @@ const urls = {
     "https://groww.in/v1/api/stocks_data/v1/accord_points/exchange/NSE/segment/CASH/latest_indices_ohlc/INDIAVIX",
 };
 
-let marketCache = {
-  nifty: 0,
-  sensex: 0,
-  bankNifty: 0,
-  indiaVix: 0,
-  updatedAt: 0,
-};
+async function fetchMarketSnapshot() {
+  const [nifty, sensex, bankNifty, indiaVix] = await Promise.all(
+    Object.values(urls).map(async (url) => {
+      const response = await fetch(url, { headers: HEADERS });
+      const data = await response.json();
+      return data.value;
+    })
+  );
 
-async function updateMarketCache() {
-  try {
-    const [nifty, sensex, bankNifty, indiaVix] = await Promise.all(
-      Object.values(urls).map(async (url) => {
-        const response = await fetch(url, { headers: HEADERS });
-        const data = await response.json();
-        return data.value;
-      })
-    );
-
-    marketCache = {
-      nifty,
-      sensex,
-      bankNifty,
-      indiaVix,
-      updatedAt: Date.now(),
-    };
-
-    console.log("Market cache updated");
-  } catch (error) {
-    console.error("Market cache update failed:", error);
-  }
+  return {
+    nifty,
+    sensex,
+    bankNifty,
+    indiaVix,
+    updatedAt: Date.now(),
+  };
 }
 
-// Initial fetch
-updateMarketCache();
-
-// Refresh every second
-setInterval(updateMarketCache, 1000);
-
-router.get("/market/indices", (_req, res) => {
-  res.json(marketCache);
+router.get("/market/indices", async (_req, res) => {
+  try {
+    const marketCache = await fetchMarketSnapshot();
+    res.json(marketCache);
+  } catch (error) {
+    console.error("Market cache update failed:", error);
+    res.status(500).json({ error: "Failed to fetch market indices." });
+  }
 });
 
 export default router;

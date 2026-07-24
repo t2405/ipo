@@ -1,10 +1,8 @@
 import "dotenv/config";
 import express from "express";
-import path from "path";
-import fs from "fs";
 import crypto from "crypto";
-import { createServer as createViteServer } from "vite";
 import Groq from "groq-sdk";
+import { createClient } from "redis";
 import axios from "axios";
 import marketRoutes from "./src/routes/market.ts";
 import * as cheerio from "cheerio";
@@ -48,7 +46,6 @@ import {
 
 
 const app = express();
-const PORT = 3000;
 
 app.use(express.json({ limit: "50mb" }));
 
@@ -97,38 +94,45 @@ function decrypt(text: string): string {
   }
 }
 
-// In-Memory Redis Caching Simulator with TTL
-class RedisCacheSimulator {
-  private cache = new Map<string, { value: any; expiry: number }>();
+const redisClient = createClient({
+  url: process.env.REDIS_URL,
+});
 
-  public get(key: string): any | null {
-    const item = this.cache.get(key);
-    if (!item) {
-      console.log(`[Redis cache miss] Key: "${key}"`);
-      return null;
+redisClient.on("error", (err) => {
+  console.warn("Redis connection warning:", err.message || err);
+});
+
+async function ensureRedisClient() {
+  if (!process.env.REDIS_URL) return null;
+  try {
+    if (!redisClient.isOpen) {
+      await redisClient.connect();
     }
-    if (Date.now() > item.expiry) {
-      console.log(`[Redis cache expired] Key: "${key}"`);
-      this.cache.delete(key);
-      return null;
-    }
-    console.log(`[Redis cache hit] Key: "${key}"`);
-    return item.value;
-  }
-
-  public set(key: string, value: any, ttlSeconds: number): void {
-    const expiry = Date.now() + ttlSeconds * 1000;
-    this.cache.set(key, { value, expiry });
-    console.log(`[Redis cache set] Key: "${key}", TTL: ${ttlSeconds}s`);
-  }
-
-  public delete(key: string): void {
-    this.cache.delete(key);
-    console.log(`[Redis cache delete] Key: "${key}"`);
+    return redisClient;
+  } catch (err) {
+    console.warn("Redis unavailable, falling back to request-scoped safe state:", err);
+    return null;
   }
 }
 
-const redisCache = new RedisCacheSimulator();
+const redisCache = {
+  async get(key: string): Promise<any | null> {
+    const client = await ensureRedisClient();
+    if (!client) return null;
+    const value = await client.get(key);
+    return value ? JSON.parse(value) : null;
+  },
+  async set(key: string, value: any, ttlSeconds: number): Promise<void> {
+    const client = await ensureRedisClient();
+    if (!client) return;
+    await client.set(key, JSON.stringify(value), { EX: ttlSeconds });
+  },
+  async delete(key: string): Promise<void> {
+    const client = await ensureRedisClient();
+    if (!client) return;
+    await client.del(key);
+  }
+};
 
 // Role-Based Access Control (RBAC) Setup
 interface RolePermissionMapping {
@@ -1333,18 +1337,30 @@ function performNseAllotmentAudit() {
   }
 }
 
-// Spin up background audit task (runs every 12 seconds to proactively check allotments)
-setInterval(() => {
-  try {
-    performNseAllotmentAudit();
-  } catch (err) {
-    console.error("Background NSE audit failed:", err);
-  }
-}, 12000);
+// Request-triggered NSE audit remains available through the API route instead of a long-running background task.
 
 // --- CUSTOM AUTHENTICATION ENGINE (JWT, OTP, GOOGLE OAUTH, RBAC) ---
 
-const OTP_CACHE = new Map<string, { otp: string; expiresAt: number }>();
+const OTP_PREFIX = "otp:";
+
+async function getOtpCacheEntry(email: string) {
+  const client = await ensureRedisClient();
+  if (!client) return null;
+  const cached = await client.get(`${OTP_PREFIX}${email}`);
+  return cached ? JSON.parse(cached) : null;
+}
+
+async function setOtpCacheEntry(email: string, value: { otp: string; expiresAt: number }) {
+  const client = await ensureRedisClient();
+  if (!client) return;
+  await client.set(`${OTP_PREFIX}${email}`, JSON.stringify(value), { EX: 300 });
+}
+
+async function deleteOtpCacheEntry(email: string) {
+  const client = await ensureRedisClient();
+  if (!client) return;
+  await client.del(`${OTP_PREFIX}${email}`);
+}
 
 function generateTokens(user: { uid: string; email: string; role: string }) {
   const accessToken = jwt.sign(
@@ -1482,7 +1498,7 @@ app.post("/api/auth/otp-send", async (req, res) => {
   const otp = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit OTP
   const expiresAt = Date.now() + 5 * 60 * 1000; // 5 mins
 
-  OTP_CACHE.set(normalizedEmail, { otp, expiresAt });
+  await setOtpCacheEntry(normalizedEmail, { otp, expiresAt });
 
   console.log(`[OTP Engine] Secure verification OTP for ${normalizedEmail} is: ${otp}`);
 
@@ -1501,14 +1517,14 @@ app.post("/api/auth/otp-verify", async (req, res) => {
   }
 
   const normalizedEmail = email.toLowerCase().trim();
-  const cached = OTP_CACHE.get(normalizedEmail);
+  const cached = await getOtpCacheEntry(normalizedEmail);
 
   if (!cached) {
     return res.status(400).json({ error: "No active OTP request found for this email" });
   }
 
   if (Date.now() > cached.expiresAt) {
-    OTP_CACHE.delete(normalizedEmail);
+    await deleteOtpCacheEntry(normalizedEmail);
     return res.status(400).json({ error: "OTP has expired. Please request a new one." });
   }
 
@@ -1516,7 +1532,7 @@ app.post("/api/auth/otp-verify", async (req, res) => {
     return res.status(400).json({ error: "Incorrect OTP. Please try again." });
   }
 
-  OTP_CACHE.delete(normalizedEmail);
+  await deleteOtpCacheEntry(normalizedEmail);
 
   try {
     let userRecord = await postgresDb.query.users.findFirst({
@@ -3978,85 +3994,8 @@ The company operates a scalable B2B/B2C service interface. Their key competitive
   };
 }
 
-// 13. Server-Sent Events (SSE) Real-Time Stream Endpoint
-// Emulates real-time WebSockets to bypass standard network container proxies
-const sseClients = new Set<express.Response>();
-app.get("/api/sse/live-stream", (req, res) => {
-  res.writeHead(200, {
-    "Content-Type": "text/event-stream",
-    "Cache-Control": "no-cache",
-    "Connection": "keep-alive"
-  });
-  
-  // Send immediate welcome message
-  res.write(`data: ${JSON.stringify({ type: "CONNECTION_STABLISHED", status: "ONLINE", timestamp: new Date().toISOString() })}\n\n`);
-  
-  sseClients.add(res);
-  
-  req.on("close", () => {
-    sseClients.delete(res);
-  });
-});
-
-// Helper to broadcast messages to all SSE clients
-function broadcastSse(data: any) {
-  const payload = `data: ${JSON.stringify(data)}\n\n`;
-  sseClients.forEach(client => {
-    try {
-      client.write(payload);
-    } catch (e) {
-      sseClients.delete(client);
-    }
-  });
-}
-
-// 14. Celery-like Background Scheduler & Cron Emulator
-// Simulates background workers, market updates, and automated notifications
-setInterval(async () => {
-  try {
-    // 1. Slightly drift a random IPO's GMP to trigger real-time updates
-    const randomIndex = Math.floor(Math.random() * globalIposList.length);
-    const ipo = globalIposList[randomIndex];
-    if (ipo && ipo.gmp !== undefined) {
-      const gmpChange = (Math.random() - 0.48) * 3; // slightly bullish drift
-      ipo.gmp = Math.max(0, Number((ipo.gmp + gmpChange).toFixed(1)));
-      
-      // Broadcast GMP Alert to live clients
-      broadcastSse({
-        type: "GMP_TICK",
-        ipoSymbol: ipo.symbol,
-        ipoName: ipo.name,
-        gmp: ipo.gmp,
-        timestamp: new Date().toISOString()
-      });
-
-      // 2. Insert alert into Postgres notifications table for users who have GMP alerts enabled
-      const usersWithAlerts = await postgresDb.select().from(dbUsers);
-      for (const u of usersWithAlerts) {
-        const records = await postgresDb.select()
-          .from(dbUserSettings)
-          .where(eq(dbUserSettings.userId, u.id))
-          .limit(1);
-        const settings = records[0];
-
-        if (!settings || settings.gmpAlerts) {
-          await postgresDb.insert(dbNotifications)
-            .values({
-              userId: u.id,
-              title: `🔥 GMP Alert: ${ipo.symbol}`,
-              message: `The Grey Market Premium of ${ipo.name} shifted to ₹${ipo.gmp} in background market audits.`,
-              type: "GMP_ALERT"
-            });
-        }
-      }
-    }
-    
-    console.log(`[Celery Worker] Background cron jobs executed. Dispatched alerts to ${sseClients.size} live streams.`);
-  } catch (err) {
-    console.error("[Celery Worker] Background task error:", err);
-  }
-}, 45000); // Trigger every 45 seconds to keep dashboard alive and active!
-
+// SSE and background cron behavior have been removed for serverless compatibility.
+// Market and notification updates should be triggered on demand by the request lifecycle.
 
 // RHP Analyzer Endpoint
 // RHP Analyzer Endpoint
@@ -5111,38 +5050,4 @@ app.post("/api/notifications/test-status-trigger", requireAuth, async (req: Auth
 });
 
 
-// Client App Hosting in development and production
-if (process.env.NODE_ENV !== "production") {
-  createViteServer({
-    server: { middlewareMode: true },
-    appType: "spa",
-  }).then((vite) => {
-    app.use(vite.middlewares);
-    
-    // Fallback index.html serve in Dev
-    app.get("*", (req, res, next) => {
-      const indexFile = path.join(process.cwd(), "index.html");
-      if (fs.existsSync(indexFile)) {
-        res.sendFile(indexFile);
-      } else {
-        next();
-      }
-    });
-  }).catch((err) => {
-    console.error("Vite Dev Server creation error:", err);
-  });
-} else {
-  const distPath = path.join(process.cwd(), "dist");
-  app.use(express.static(distPath));
-  app.get("*", (req, res) => {
-    res.sendFile(path.join(distPath, "index.html"));
-  });
-}
-
-//
-
-
-// sabse last me ye hona chahiye
-app.listen(PORT, () => {
-  console.log(`Server running on ${PORT}`);
-});
+export default app;
