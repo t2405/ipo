@@ -8,7 +8,10 @@ import axios from "axios";
 import marketRoutes from "./src/routes/market.js";
 import * as cheerio from "cheerio";
 import jwt from "jsonwebtoken";
-import { PDFParse } from "pdf-parse";
+import { createRequire } from "module";
+
+const require = createRequire(import.meta.url);
+const { PDFParse } = require("pdf-parse");
 
 // Import PostgreSQL Database & authentication middleware
 import { db as postgresDb } from "./src/db/index.js";
