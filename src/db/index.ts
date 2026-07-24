@@ -1,7 +1,7 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 const { Pool } = pg;
-import * as schema from "./schema";
+import * as schema from "./schema.js";
 
 // Add global connection pool caching to persist across hot-reloads
 declare global {
@@ -69,4 +69,4 @@ pool
 
 // Initialize Drizzle with the pool and schema.
 export const db = drizzle(pool, { schema });
-export * as schema from "./schema";
+export * as schema from "./schema.js";

@@ -1,4 +1,4 @@
-import { refreshKfintechIpoList } from '../src/services/kfintech.service';
+import { refreshKfintechIpoList } from '../src/services/kfintech.service.js';
 
 (async function(){
   try {

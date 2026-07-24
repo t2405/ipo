@@ -3,15 +3,15 @@ import {
   getCachedKfintechIpoList,
   refreshKfintechIpoList,
   checkKfintechAllotmentStatus,
-} from "../services/kfintech.service";
+} from "../services/kfintech.service.js";
 import {
   getCachedMufgIpoList,
   refreshMufgIpoList,
   checkMufgAllotmentStatus,
-} from "../services/mufg.service";
-import { AuthRequest } from "../middleware/auth";
-import { db } from "../db/index";
-import { allotmentChecks } from "../db/schema";
+} from "../services/mufg.service.js";
+import { AuthRequest } from "../middleware/auth.js";
+import { db } from "../db/index.js";
+import { allotmentChecks } from "../db/schema.js";
 import { eq, desc } from "drizzle-orm";
 
 export async function getKfintechList(req: AuthRequest, res: Response) {

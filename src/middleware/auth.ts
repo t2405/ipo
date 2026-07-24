@@ -1,10 +1,10 @@
 import { Request, Response, NextFunction } from "express";
-import { adminAuth } from "../lib/firebase-admin";
-import { db } from "../db/index";
-import { users, userSettings, portfolioHoldings } from "../db/schema";
+import { adminAuth } from "../lib/firebase-admin.js";
+import { db } from "../db/index.js";
+import { users, userSettings, portfolioHoldings } from "../db/schema.js";
 import { eq } from "drizzle-orm";
 import jwt from "jsonwebtoken";
-import { secretsManager } from "./security";
+import { secretsManager } from "./security.js";
 
 const getJwtSecret = () => secretsManager.get("JWT_SECRET");
 

@@ -1,9 +1,9 @@
 import express from "express";
-import { requireAuth } from "../middleware/auth";
+import { requireAuth } from "../middleware/auth.js";
 import {
   getUserPan,
   saveUserPan,
-} from "../controllers/userPan.controller";
+} from "../controllers/userPan.controller.js";
 
 const router = express.Router();
 
