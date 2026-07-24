@@ -11,7 +11,7 @@ import jwt from "jsonwebtoken";
 import { PDFParse } from "pdf-parse";
 
 // Import PostgreSQL Database & authentication middleware
-import { db as postgresDb } from "./src/db/index";
+import { db as postgresDb } from "./src/db/index.js";
 import { 
   users as dbUsers, 
   watchlist as dbWatchlist, 
@@ -25,11 +25,11 @@ import {
   marketData as dbMarketData,
   auditLogs as dbAuditLogs,
   apiUsageLogs as dbApiUsageLogs
-} from "./src/db/schema";
-import { requireAuth, AuthRequest } from "./src/middleware/auth";
+} from "./src/db/schema.js";
+import { requireAuth, AuthRequest } from "./src/middleware/auth.js";
 import { eq, and } from "drizzle-orm";
-import allotmentRoutes from "./src/routes/allotment.routes";
-import userPanRoutes from "./src/routes/userPan.routes";
+import allotmentRoutes from "./src/routes/allotment.routes.js";
+import userPanRoutes from "./src/routes/userPan.routes.js";
 import {
   secretsManager,
   customRateLimiter,
@@ -42,7 +42,7 @@ import {
   rateLimitLogs,
   activeCsrfTokens,
   revokedRefreshTokens
-} from "./src/middleware/security";
+} from "./src/middleware/security.js";
 
 
 
