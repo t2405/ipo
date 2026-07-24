@@ -120,7 +120,12 @@ const redisCache = {
     const client = await ensureRedisClient();
     if (!client) return null;
     const value = await client.get(key);
-    return value ? JSON.parse(value) : null;
+
+    if (typeof value !== "string") {
+      return null;
+    }
+
+    return JSON.parse(value);
   },
   async set(key: string, value: any, ttlSeconds: number): Promise<void> {
     const client = await ensureRedisClient();
@@ -1276,7 +1281,12 @@ async function getOtpCacheEntry(email: string) {
   const client = await ensureRedisClient();
   if (!client) return null;
   const cached = await client.get(`${OTP_PREFIX}${email}`);
-  return cached ? JSON.parse(cached) : null;
+
+  if (typeof cached !== "string") {
+    return null;
+  }
+
+  return JSON.parse(cached);
 }
 
 async function setOtpCacheEntry(email: string, value: { otp: string; expiresAt: number }) {

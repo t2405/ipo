@@ -10,7 +10,7 @@ const KFINTECH_CACHE_KEY = "kfintech_ipos";
 const KFINTECH_CACHE_TTL = 60 * 60 * 3; // 3 hours
 
 export async function getCachedKfintechIpoList(): Promise<KfintechIpoItem[]> {
-  const cached = redisCache.get(KFINTECH_CACHE_KEY) as KfintechIpoItem[] | null;
+  const cached = (await redisCache.get(KFINTECH_CACHE_KEY)) as KfintechIpoItem[] | null;
   if (cached) return cached;
   const list = await refreshKfintechIpoList();
   return list;

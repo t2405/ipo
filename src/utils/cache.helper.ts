@@ -1,13 +1,13 @@
 import { createClient } from "redis";
 
 class RedisCacheService {
-  private client: ReturnType<typeof createClient> | null = null;
+  private client: any = null;
   private fallbackCache = new Map<
     string,
     { value: unknown; expiry: number }
   >();
 
-  private async ensureClient(): Promise<ReturnType<typeof createClient> | null> {
+  private async ensureClient(): Promise<any> {
     if (this.client) return this.client;
 
     const connectionString = process.env.REDIS_URL;
@@ -50,7 +50,11 @@ class RedisCacheService {
       const text =
         typeof value === "string"
           ? value
-          : value.toString();
+          : value?.toString?.() ?? null;
+
+      if (text == null) {
+        return null;
+      }
 
       return JSON.parse(text) as T;
     }
