@@ -11,8 +11,7 @@ import jwt from "jsonwebtoken";
 import { createRequire } from "module";
 
 const require = createRequire(import.meta.url);
-const { PDFParse } = require("pdf-parse");
-
+import pdf from "pdf-parse";
 // Import PostgreSQL Database & authentication middleware
 import { db as postgresDb } from "./src/db/index.js";
 import { 

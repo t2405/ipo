@@ -27,7 +27,7 @@
     "jwks-rsa": "^2.1.5",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
-    "pdf-parse": "^2.4.5",
+    "pdf-parse": "^1.1.1",
     "pg": "^8.22.0",
     "playwright": "^1.61.1",
     "react": "^19.0.1",
