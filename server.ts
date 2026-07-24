@@ -164,86 +164,32 @@ function checkPermission(requiredPermission: string) {
   };
 }
 
-// In-memory or JSON-file database for applications and portfolio
-const DB_FILE = path.join(process.cwd(), "iposense_db.json");
-
 // Normalized Database Schema representation
 interface DbSchema {
-  users: any[];             // User accounts with roles
-  roles: any[];             // Roles definitions
-  permissions: any[];       // Permission definitions
-  ipos: any[];              // IPOS_DATA snapshot
-  company_financials: any[];// Company financials mapping
-  subscription_data: any[]; // Subscription milestones
-  gmp_history: any[];       // Historical GMP pricing
-  ai_scores: any[];         // Evaluating scores and sentiment logs
-  applications: any[];      // User applied IPO application records
-  allotments: any[];        // Allotment result maps
-  portfolio: any[];         // User stock portfolios
-  watchlist: string[];      // Symbols matching watchlists
-  notifications: any[];     // Real-time server push alerts
-  market_data: any[];       // Exchange stock live prices
-  news: any[];              // Aggregated financial news feed
-  ai_predictions: any[];    // Listing price ML forecasts
-  chat_history: any[];      // Floating AI chatbot logs
-  audit_logs: any[];        // System activity audits
-  sessions: any[];          // User JWT activity state
-  user_settings: any[];     // User configurations (notifications, emails, SMS)
+  users: any[];
+  roles: any[];
+  permissions: any[];
+  ipos: any[];
+  company_financials: any[];
+  subscription_data: any[];
+  gmp_history: any[];
+  ai_scores: any[];
+  applications: any[];
+  allotments: any[];
+  portfolio: any[];
+  watchlist: string[];
+  notifications: any[];
+  market_data: any[];
+  news: any[];
+  ai_predictions: any[];
+  chat_history: any[];
+  audit_logs: any[];
+  sessions: any[];
+  user_settings: any[];
 }
 
-function loadDb(): DbSchema {
-  try {
-    if (fs.existsSync(DB_FILE)) {
-      const content = fs.readFileSync(DB_FILE, "utf-8");
-      const parsed = JSON.parse(content);
-      
-      // Ensure all normalized table structures exist in the file database
-      const tables = [
-        "users", "roles", "permissions", "ipos", "company_financials", 
-        "subscription_data", "gmp_history", "ai_scores", "applications", 
-        "allotments", "portfolio", "watchlist", "notifications", 
-        "market_data", "news", "ai_predictions", "chat_history", 
-        "audit_logs", "sessions", "user_settings"
-      ];
-      
-      tables.forEach(table => {
-        if (!parsed[table]) parsed[table] = [];
-      });
-
-      // Decrypt applications on loading (PAN & appNumber) so active routes read transparently
-      parsed.applications = parsed.applications.map((app: any) => ({
-        ...app,
-        pan: decrypt(app.pan),
-        appNumber: decrypt(app.appNumber)
-      }));
-
-      if (!parsed.notifications || parsed.notifications.length === 0) {
-        parsed.notifications = [
-          {
-            id: "NOTIF-SEED-GMP",
-            title: "📈 Solaris Renewable GMP Jump",
-            message: "Solaris Renewable energy GMP rose +12% following a heavy ₹950 Cr anchor investment roster.",
-            timestamp: new Date(Date.now() - 3600000 * 2).toISOString(),
-            type: "gmp_alert",
-            read: false
-          },
-          {
-            id: "NOTIF-SEED-SYS",
-            title: "🔮 Acme CloudTech AI recommendation",
-            message: "Our AI Scoring engine has issued an 'APPLY' recommendation with an outstanding score of 88.",
-            timestamp: new Date(Date.now() - 3600000 * 4).toISOString(),
-            type: "system",
-            read: false
-          }
-        ];
-      }
-      return parsed;
-    }
-  } catch (err) {
-    console.error("Failed to read DB file, using default:", err);
-  }
-  
-  return { 
+function createDefaultDb(): DbSchema {
+  return {
     users: [
       { id: "USER-1", email: "investor@iposense.ai", name: "Alpha Investor", role: "INVESTOR" },
       { id: "USER-2", email: "admin@iposense.ai", name: "System Admin", role: "ADMINISTRATOR" }
@@ -261,9 +207,9 @@ function loadDb(): DbSchema {
     subscription_data: [],
     gmp_history: [],
     ai_scores: [],
-    applications: [], 
-    portfolio: [], 
-    watchlist: [], 
+    applications: [],
+    portfolio: [],
+    watchlist: [],
     allotments: [],
     market_data: [],
     news: [],
@@ -293,24 +239,12 @@ function loadDb(): DbSchema {
         type: "system",
         read: false
       }
-    ] 
+    ]
   };
 }
 
-function saveDb(data: DbSchema) {
-  try {
-    // Encrypt sensitive fields (PAN & appNumber) before storing to disk (AES-256 secure storage)
-    const clonedData = JSON.parse(JSON.stringify(data));
-    clonedData.applications = clonedData.applications.map((app: any) => ({
-      ...app,
-      pan: encrypt(app.pan),
-      appNumber: encrypt(app.appNumber)
-    }));
-
-    fs.writeFileSync(DB_FILE, JSON.stringify(clonedData, null, 2), "utf-8");
-  } catch (err) {
-    console.error("Failed to save DB file securely:", err);
-  }
+function saveDb(_data: DbSchema) {
+  // Serverless-safe runtime fallback: keep this request-scoped and rely on PostgreSQL/Redis for durable state.
 }
 
 function addNotification(
@@ -320,7 +254,7 @@ function addNotification(
   ipoName?: string,
   appNumber?: string
 ) {
-  db = loadDb();
+  db = createDefaultDb();
   if (!db.notifications) db.notifications = [];
   
   const isDuplicate = db.notifications.some(
@@ -342,7 +276,7 @@ function addNotification(
 }
 
 // Ensure database is initialized
-let db = loadDb();
+let db = createDefaultDb();
 
 // Groq Circuit Breaker Pattern State
 let isGroqCircuitBroken = false;
@@ -943,8 +877,8 @@ const REAL_NSE_IPOS = [
 
 // Global runtime IPOs dataset variable
 let globalIposList: any[] = [];
-const REALTIME_CACHE_FILE = path.join(process.cwd(), "iposense_realtime.json");
-const CACHE_TTL_MS = 1000 * 60 * 30; // 30 minutes cache duration
+const REALTIME_CACHE_KEY = "realtime_ipos";
+const CACHE_TTL_SECONDS = 60 * 30; // 30 minutes cache duration
 
 // Live search grounding fetcher via Groq API
 async function fetchNseRealTimeIposFromGroq(): Promise<any[]> {
@@ -1040,14 +974,9 @@ Do not return any explanations or markdown blocks. Just output raw, valid JSON. 
 // Caching load controller
 async function getIposDataset(): Promise<any[]> {
   try {
-    if (fs.existsSync(REALTIME_CACHE_FILE)) {
-      const stats = fs.statSync(REALTIME_CACHE_FILE);
-      if (Date.now() - stats.mtimeMs < CACHE_TTL_MS) {
-        const cached = JSON.parse(fs.readFileSync(REALTIME_CACHE_FILE, "utf-8"));
-        if (Array.isArray(cached) && cached.length > 0) {
-          return cached;
-        }
-      }
+    const cached = await redisCache.get(REALTIME_CACHE_KEY);
+    if (Array.isArray(cached) && cached.length > 0) {
+      return cached;
     }
   } catch (err) {
     console.error("Cache read failed:", err);
@@ -1055,7 +984,7 @@ async function getIposDataset(): Promise<any[]> {
 
   const live = await fetchNseRealTimeIposFromGroq();
   try {
-    fs.writeFileSync(REALTIME_CACHE_FILE, JSON.stringify(live, null, 2), "utf-8");
+    await redisCache.set(REALTIME_CACHE_KEY, live, CACHE_TTL_SECONDS);
   } catch (err) {
     console.error("Cache write failed:", err);
   }
@@ -1268,7 +1197,7 @@ const getIpoById = (id: string) => globalIposList.find(i =>
 
 // NSE Audit background function simulating live National Stock Exchange query check
 function performNseAllotmentAudit() {
-  db = loadDb();
+  db = createDefaultDb();
   let changed = false;
 
   const appliedApps = db.applications.filter(a => a.status === "APPLIED");
@@ -2384,7 +2313,7 @@ app.post("/api/applications/nse-sync", async (req, res) => {
     performNseAllotmentAudit();
     // Refresh the live listings list from the NSE
     await refreshIposList();
-    db = loadDb();
+    db = createDefaultDb();
     res.json({ success: true, ipos: globalIposList, applications: db.applications, notifications: db.notifications });
   } catch (err: any) {
     res.status(500).json({ error: err.message || "Failed to trigger live NSE synchronization" });
@@ -3576,7 +3505,7 @@ async function getClosedIPOList(): Promise<any[]> {
     // Cache for 5 minutes
     redisCache.set(cacheKey, list, 300);
     return list;
-  } catch (err) {
+  } catch (err: any) {
     console.error("Failed to fetch Groww closed IPOs:", err?.message || err);
     return [];
   }
