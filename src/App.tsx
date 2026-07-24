@@ -19,7 +19,7 @@ import ResearchHub from "./components/ResearchHub";
 import { auth } from "./lib/firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { IPO, Application, PortfolioHolding } from "./types";
-import { Sparkles, Calendar, BadgeAlert, RefreshCw, Sun, Moon } from "lucide-react";
+import { Sparkles, Calendar, RefreshCw, Sun, Moon } from "lucide-react";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState("dashboard");
@@ -50,8 +50,6 @@ export default function App() {
     }
   };
   const [loading, setLoading] = useState(true);
-  const [serviceUnavailable, setServiceUnavailable] = useState(false);
-  const [simulateRateLimit, setSimulateRateLimit] = useState(false);
 
   // Authentication session states
   const [user, setUser] = useState<any>(() => {
@@ -131,101 +129,36 @@ const apiFetch = async (url: string, options: RequestInit = {}) => {
 
  
 
-  // Function to fetch real-time data from the NSE/IPO API using the API key (proxied securely via /api/nse-ipos)
-  const fetchRealtimeIpos = async (): Promise<IPO[]> => {
-    const url = `/api/nse-ipos${simulateRateLimit ? "?simulateLimit=true" : ""}`;
-    const res = await fetch(url);
-    if (res.status === 429 || res.status === 403 || res.status === 503) {
-      throw new Error("RATE_LIMIT_EXCEEDED");
-    }
-    if (!res.ok) {
-      throw new Error(`API returned non-200 status: ${res.status}`);
-    }
-    return await res.json();
-  };
-
   // Loaders
   const fetchIpos = async () => {
     try {
-      setServiceUnavailable(false);
-      
-      // If we are simulating API limit exhaustion, jump straight to real-time fetch to catch the error
-      if (simulateRateLimit) {
-        const data = await fetchRealtimeIpos();
-        setIpos(data.map((ipo: any) => ({
-          ...ipo,
-          companyName: ipo.companyName || ipo.name,
-          price: ipo.price || ipo.priceBand,
-          gmp: ipo.gmp ?? 0,
-          aiScore: ipo.aiScore ?? 75,
-          aiConfidence: ipo.aiConfidence ?? 80,
-          riskScore: ipo.riskScore ?? 50,
-          recommendation: ipo.recommendation || "MODERATE"
-        })));
-        return;
-      }
-
       const res = await fetch("/api/ipos");
-      if (res.ok) {
-        const data = await res.json();
-        
-        const normalizedIpos = data.map((ipo: any) => ({
-          ...ipo,
-          companyName: ipo.companyName || ipo.name,
-          price: ipo.price || ipo.priceBand,
-          gmp: ipo.gmp ?? 0,
-          aiScore: ipo.aiScore ?? 75,
-          aiConfidence: ipo.aiConfidence ?? 80,
-          riskScore: ipo.riskScore ?? 50,
-          recommendation: ipo.recommendation || "MODERATE",
-          subscriptionOverall: ipo.subscriptionOverall ?? 0,
-          industry: ipo.industry || "Technology",
-          strengths: ipo.strengths || [],
-          risks: ipo.risks || [],
-          financials: ipo.financials || []
-        }));
+      if (!res.ok) {
+        throw new Error(`API returned non-200 status: ${res.status}`);
+      }
 
-        setIpos(normalizedIpos);
-      } else {
-        console.warn("Primary /api/ipos route failed, falling back to real-time fetch...");
-        const data = await fetchRealtimeIpos();
-        setIpos(data.map((ipo: any) => ({
-          ...ipo,
-          companyName: ipo.companyName || ipo.name,
-          price: ipo.price || ipo.priceBand,
-          gmp: ipo.gmp ?? 0,
-          aiScore: ipo.aiScore ?? 75,
-          aiConfidence: ipo.aiConfidence ?? 80,
-          riskScore: ipo.riskScore ?? 50,
-          recommendation: ipo.recommendation || "MODERATE"
-        })));
-      }
-    } catch (e: any) {
+      const data = await res.json();
+
+      const normalizedIpos = data.map((ipo: any) => ({
+        ...ipo,
+        companyName: ipo.companyName || ipo.name,
+        price: ipo.price || ipo.priceBand,
+        gmp: ipo.gmp ?? 0,
+        aiScore: ipo.aiScore ?? 75,
+        aiConfidence: ipo.aiConfidence ?? 80,
+        riskScore: ipo.riskScore ?? 50,
+        recommendation: ipo.recommendation || "MODERATE",
+        subscriptionOverall: ipo.subscriptionOverall ?? 0,
+        industry: ipo.industry || "Technology",
+        strengths: ipo.strengths || [],
+        risks: ipo.risks || [],
+        financials: ipo.financials || []
+      }));
+
+      setIpos(normalizedIpos);
+    } catch (e) {
       console.error("Failed to load IPO indexes:", e);
-      if (e.message === "RATE_LIMIT_EXCEEDED" || (e.status && (e.status === 429 || e.status === 403))) {
-        setServiceUnavailable(true);
-      } else {
-        // Try the real-time fetch to recover
-        try {
-          const data = await fetchRealtimeIpos();
-          setIpos(data.map((ipo: any) => ({
-            ...ipo,
-            companyName: ipo.companyName || ipo.name,
-            price: ipo.price || ipo.priceBand,
-            gmp: ipo.gmp ?? 0,
-            aiScore: ipo.aiScore ?? 75,
-            aiConfidence: ipo.aiConfidence ?? 80,
-            riskScore: ipo.riskScore ?? 50,
-            recommendation: ipo.recommendation || "MODERATE"
-          })));
-        } catch (innerErr: any) {
-          if (innerErr.message === "RATE_LIMIT_EXCEEDED") {
-            setServiceUnavailable(true);
-          } else {
-            setServiceUnavailable(true);
-          }
-        }
-      }
+      setIpos([]);
     }
   };
 
@@ -659,86 +592,11 @@ const symbols = normalizedHoldings
                 <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
                 <span className="text-xs font-mono text-muted-foreground animate-pulse">Synchronizing multi-source financial indexes...</span>
               </div>
-            ) : serviceUnavailable ? (
-              <div className="min-h-[60vh] flex items-center justify-center">
-                <div className="max-w-2xl w-full bg-card border border-rose-500/20 rounded-2xl p-8 shadow-xl relative overflow-hidden">
-                  <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-rose-500 via-amber-500 to-rose-500 animate-pulse"></div>
-                  
-                  <div className="flex items-start space-x-5">
-                    <div className="p-3 bg-rose-500/10 rounded-xl text-rose-500 shrink-0">
-                      <BadgeAlert className="h-8 w-8 animate-bounce" />
-                    </div>
-                    <div className="space-y-4 flex-1">
-                      <div>
-                        <span className="text-[10px] font-mono font-semibold tracking-wider uppercase px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20">
-                          HTTP STATUS 429 / 503
-                        </span>
-                        <h2 className="text-xl font-bold tracking-tight text-foreground mt-2">
-                          NSE IPO Intelligence Service Temporarily Offline
-                        </h2>
-                        <p className="text-sm text-muted-foreground mt-1.5 leading-relaxed">
-                          The real-time NSE/IPO API rate limit or client request quota has been exhausted. Secure communication gateway returned a <code className="text-rose-400 bg-rose-500/10 px-1 py-0.5 rounded font-mono text-xs">Too Many Requests (429)</code> or <code className="text-rose-400 bg-rose-500/10 px-1 py-0.5 rounded font-mono text-xs">Service Unavailable (503)</code> response.
-                        </p>
-                      </div>
- 
-                      <div className="bg-muted/30 border border-border rounded-xl p-4 font-mono text-xs text-muted-foreground space-y-2">
-                        <div className="flex justify-between">
-                          <span>Target Endpoint:</span>
-                          <span className="text-foreground font-semibold">https://upcoming-ipo-calendar.p.rapidapi.com/</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Secure Gateway Proxy:</span>
-                          <span className="text-foreground">/api/nse-ipos</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Active API Key:</span>
-                          <span className="text-rose-400 font-semibold select-all">e769201f04msh11b41ffaf3ac7d0p149f96jsn42faf1fb86aa</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Diagnostics State:</span>
-                          <span className="text-rose-400 font-semibold uppercase">{simulateRateLimit ? "EMULATION ACTIVE" : "REAL API LIMIT EXHAUSTED"}</span>
-                        </div>
-                      </div>
- 
-                      <div className="flex items-center space-x-3 pt-2">
-                        <button
-                          onClick={() => {
-                            setLoading(true);
-                            fetchIpos().finally(() => setLoading(false));
-                          }}
-                          className="px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/95 text-xs font-semibold rounded-xl flex items-center space-x-2 shadow-sm transition-all cursor-pointer"
-                        >
-                          <RefreshCw className="h-3.5 w-3.5" />
-                          <span>Retry Connection</span>
-                        </button>
-                        
-                        {simulateRateLimit && (
-                          <button
-                            onClick={() => {
-                              setSimulateRateLimit(false);
-                              setLoading(true);
-                              // Timeout to allow state sync before fetch
-                              setTimeout(() => {
-                                fetchIpos().finally(() => setLoading(false));
-                              }, 100);
-                            }}
-                            className="px-4 py-2 bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground text-xs font-semibold rounded-xl border border-border transition-all cursor-pointer"
-                          >
-                            Disable Emulation (Restore Sandbox)
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
             ) : (
               <>
                 {activeTab === "admin" && (
                   <AdminCenter 
                     onNseSync={handleNseSync}
-                    simulateRateLimit={simulateRateLimit}
-                    setSimulateRateLimit={setSimulateRateLimit}
                   />
                 )}
                 {activeTab === "research" && (

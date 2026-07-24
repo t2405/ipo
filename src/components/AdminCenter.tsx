@@ -60,14 +60,10 @@ interface MarketDataRecord {
 
 interface AdminCenterProps {
   onNseSync: () => Promise<boolean>;
-  simulateRateLimit: boolean;
-  setSimulateRateLimit: (simulate: boolean) => void;
 }
 
 export default function AdminCenter({ 
   onNseSync,
-  simulateRateLimit,
-  setSimulateRateLimit
 }: AdminCenterProps) {
   const [users, setUsers] = useState<UserRecord[]>([]);
   const [loading, setLoading] = useState(false);
@@ -1118,19 +1114,6 @@ export default function AdminCenter({
               >
                 {syncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4 shrink-0" />}
                 <span>Trigger NSE Allotment Audit</span>
-              </button>
-
-              {/* Rate limit toggler */}
-              <button
-                onClick={() => {
-                  const state = !simulateRateLimit;
-                  setSimulateRateLimit(state);
-                  addLog(`Rate-limit Simulation: ${state ? "ENABLED (429 status response)" : "DISABLED"}`);
-                }}
-                className="w-full py-2 px-3 bg-muted hover:bg-muted/80 text-foreground text-xs font-semibold rounded-xl flex items-center justify-center space-x-2 transition-all border border-border cursor-pointer"
-              >
-                <Settings className="h-4 w-4 text-amber-500 shrink-0" />
-                <span>{simulateRateLimit ? "Disable Rate Limit Simulation" : "Enable Rate Limit Simulation (429)"}</span>
               </button>
 
               {/* Test alerts broadcasts */}
