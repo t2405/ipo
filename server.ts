@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import crypto from "crypto";
+import { pathToFileURL } from "node:url";
 import Groq from "groq-sdk";
 import { createClient } from "redis";
 import axios from "axios";
@@ -57,6 +58,25 @@ app.use(csrfProtection);
 app.use("/api", allotmentRoutes);
 app.use("/api", userPanRoutes);
 app.use("/api", marketRoutes);
+
+app.get("/api/sse/live-stream", (_req, res) => {
+  res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+  res.flushHeaders?.();
+
+  const keepAlive = () => {
+    res.write(`data: ${JSON.stringify({ type: "KEEPALIVE", timestamp: new Date().toISOString() })}\n\n`);
+  };
+
+  keepAlive();
+  const timer = setInterval(keepAlive, 30000);
+
+  res.on("close", () => {
+    clearInterval(timer);
+  });
+});
+
 // AES-256-CBC Encryption Key & IV Settings
 const getAesSecret = () => secretsManager.get("AES_SECRET") || "d6f51952a2d48858e3b567ef54fa86aa";
 const IV_LENGTH = 16;
@@ -2236,6 +2256,16 @@ app.post("/api/user/settings", requireAuth, async (req: AuthRequest, res) => {
 
 
 // 1. Fetch all IPOs from Groww
+app.get("/api/ipo-indexes", async (_req, res) => {
+  try {
+    const data = await getIposDataset();
+    res.json(data);
+  } catch (err) {
+    console.error("IPO indexes alias failed:", err);
+    res.status(500).json({ error: "Failed to fetch IPO indexes" });
+  }
+});
+
 app.get("/api/ipos", async (req, res) => {
   try {
     console.log("Fetching IPO data from Groww...");
@@ -4553,5 +4583,12 @@ app.post("/api/notifications/test-status-trigger", requireAuth, async (req: Auth
   }
 });
 
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const port = Number(process.env.PORT || 3001);
+  app.listen(port, () => {
+    console.log(`API server listening on http://localhost:${port}`);
+  });
+}
 
 export default app;
