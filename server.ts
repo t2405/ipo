@@ -2013,6 +2013,37 @@ app.get("/api/admin/api-usage-logs", requireAuth, async (req: AuthRequest, res) 
 });
 
 
+// Listing Day Companies Route - parses closed IPO data from Groww HTML Next.js payload
+app.get("/api/listing-day/companies", async (_req, res) => {
+  try {
+    const response = await fetch("https://groww.in/ipo/closed", {
+      headers: {
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "text/html"
+      }
+    });
+
+    if (!response.ok) {
+      return res.status(response.status).json({ error: "Failed to fetch Groww closed IPO page" });
+    }
+
+    const html = await response.text();
+    const match = html.match(/<script id="__NEXT_DATA__" type="application\/json"[^>]*>(.*?)<\/script>/s);
+
+    if (!match || !match[1]) {
+      return res.status(500).json({ error: "Groww IPO data payload not found" });
+    }
+
+    const json = JSON.parse(match[1]);
+    const companies = json?.props?.pageProps?.dataList || [];
+
+    return res.json(companies);
+  } catch (error) {
+    console.error("Listing day companies fetch failed:", error);
+    return res.status(500).json({ error: "Failed to fetch companies" });
+  }
+});
+
 // Groww IPO Proxy Route (server-side fetch to bypass browser CORS)
 app.get("/api/ipo/groww/open", async (req, res) => {
   try {
@@ -3093,51 +3124,67 @@ app.post("/api/groq/music", (req, res) => {
 
 // 10. Listing Day: fetch Groww closed IPO SSR HTML and provide companies + analysis endpoints
 
+
+
 async function getClosedIPOList(): Promise<any[]> {
   const cacheKey = "groww_closed_ipos";
   const cached = redisCache.get(cacheKey);
+
   if (cached) return cached;
 
-  const url = "https://groww.in/ipo/closed";
   try {
-    const { data: html } = await axios.get(url, {
-      headers: { "User-Agent": "Mozilla/5.0 (compatible; iposense/1.0)" },
-      timeout: 10_000
-    });
+    const { data: html } = await axios.get(
+      "https://groww.in/ipo/closed",
+      {
+        headers: {
+          "User-Agent": "Mozilla/5.0"
+        },
+        timeout: 10000
+      }
+    );
 
-    const $ = cheerio.load(html);
-    const script = $("#__NEXT_DATA__").html();
-    if (!script) return [];
-    const nextData = JSON.parse(script);
+    const match = html.match(
+      /<script id="__NEXT_DATA__" type="application\/json"[^>]*>(.*?)<\/script>/
+    );
+
+    if (!match) {
+      console.error("NEXT_DATA not found");
+      return [];
+    }
+
+    const nextData = JSON.parse(match[1]);
+
     const list = nextData?.props?.pageProps?.dataList || [];
-    // Cache for 5 minutes
+
+    console.log("Closed IPO fetched:", list.length);
+
     redisCache.set(cacheKey, list, 300);
+
     return list;
+
   } catch (err: any) {
-    console.error("Failed to fetch Groww closed IPOs:", err?.message || err);
+    console.error("Failed to fetch Groww closed IPOs:", err.message);
     return [];
   }
 }
 
-app.get("/api/listing-day/companies", async (req, res) => {
+// Listing Day Companies Endpoint
+app.get("/api/listing-day/companies", async (_req, res) => {
   try {
     const list = await getClosedIPOList();
-    const mapped = list.map((ipo: any) => ({
-      symbol: ipo.symbol || ipo.searchId || ipo.companyCode || null,
-      companyName: ipo.companyName || ipo.name || ipo.company || null,
-      issuePrice: ipo.issuePrice ?? ipo.minPrice ?? ipo.maxPrice ?? null,
-      subscription: ipo.overallSubscription ?? ipo.subscriptionOverall ?? null,
-      openingDate: ipo.openingDate || ipo.openDate || null,
-      closingDate: ipo.closingDate || ipo.closeDate || null,
-      listingDate: ipo.listingDate || (ipo.listingTimestamp ? new Date(ipo.listingTimestamp).toISOString().split("T")[0] : null),
-      isListed: ipo.isListed ?? Boolean(ipo.listingPrice) ?? false,
+
+    res.json(list.map((ipo: any) => ({
+      symbol: ipo.symbol || ipo.searchId || "",
+      companyName: ipo.companyName || "Unknown",
+      issuePrice: ipo.issuePrice ?? null,
       listingPrice: ipo.listingPrice ?? null,
       listingReturn: ipo.listingReturn ?? null,
+      overallSubscription: ipo.overallSubscription ?? null,
+      isListed: ipo.isListed ?? false,
       isSme: ipo.isSme ?? false,
-      logoUrl: ipo.logoUrl || null,
-      rtaLink: ipo.rtaLink || null
-    }));
-    res.json(mapped);
+      openingDate: ipo.openingDate ?? null,
+      closingDate: ipo.closingDate ?? null
+    })));
   } catch (err) {
     console.error("/api/listing-day/companies error:", err);
     res.status(500).json({ error: "Failed to fetch companies" });
