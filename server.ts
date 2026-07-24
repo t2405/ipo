@@ -1400,10 +1400,7 @@ app.post("/api/auth/refresh", async (req, res) => {
 
 // 6. GOOGLE OAUTH URL
 app.get("/api/auth/google-url", (req, res) => {
-  const callbackUrl =
-    process.env.APP_URL
-      ? `${process.env.APP_URL}/auth/callback`
-      : `${req.protocol}://${req.get("host")}/auth/callback`;
+  const callbackUrl = `${process.env.APP_URL || `${req.protocol}://${req.get("host")}`}/auth/callback`;
   const params = new URLSearchParams({
     client_id: process.env.GOOGLE_CLIENT_ID!,
     redirect_uri: callbackUrl,
@@ -1598,46 +1595,53 @@ const callbackUrl =
             <p>Redirecting back to IPOSense workspace...</p>
           </div>
           <script>
-  const user = ${userPayload};
+const user = ${userPayload};
+const authPayload = {
+  accessToken: "${jwtAccessToken}",
+  refreshToken: "${refreshToken}",
+  user,
+};
 
-  try {
-    // Always persist auth locally
-    localStorage.setItem("iposense_access_token", "${jwtAccessToken}");
-    localStorage.setItem("iposense_refresh_token", "${refreshToken}");
-    localStorage.setItem("iposense_user", JSON.stringify(user));
+try {
+  localStorage.setItem("iposense_access_token", authPayload.accessToken);
+  localStorage.setItem("iposense_refresh_token", authPayload.refreshToken);
+  localStorage.setItem("iposense_user", JSON.stringify(authPayload.user));
 
-    // Notify current tab
-    window.dispatchEvent(new Event("iposense_auth_changed"));
+  // BroadcastChannel for cross-tab auth success notification
+  const channel = new BroadcastChannel("iposense-auth");
+  channel.postMessage({
+    type: "OAUTH_AUTH_SUCCESS",
+    ...authPayload,
+  });
+  channel.close();
 
-    // Notify opener if login was done in popup
-    if (window.opener && !window.opener.closed) {
-      window.opener.postMessage(
-        {
-          type: "OAUTH_AUTH_SUCCESS",
-          accessToken: "${jwtAccessToken}",
-          refreshToken: "${refreshToken}",
-          user,
-        },
-        window.location.origin
-      );
+  if (window.opener && !window.opener.closed) {
+    window.opener.localStorage.setItem("iposense_access_token", authPayload.accessToken);
+    window.opener.localStorage.setItem("iposense_refresh_token", authPayload.refreshToken);
+    window.opener.localStorage.setItem("iposense_user", JSON.stringify(authPayload.user));
 
-      window.close();
-    } else {
-      // Same-tab login
-      window.location.replace("/");
-    }
-  } catch (err) {
-    console.error("OAuth callback error:", err);
+    window.opener.dispatchEvent(new StorageEvent("storage", {
+      key: "iposense_access_token",
+      newValue: authPayload.accessToken,
+    }));
 
-    // Fallback: ensure tokens are still available
-    try {
-      localStorage.setItem("iposense_access_token", "${jwtAccessToken}");
-      localStorage.setItem("iposense_refresh_token", "${refreshToken}");
-      localStorage.setItem("iposense_user", JSON.stringify(user));
-    } catch (e) {}
+    window.opener.postMessage({
+      type: "OAUTH_AUTH_SUCCESS",
+      ...authPayload,
+    }, window.location.origin);
 
-    window.location.replace("/");
+    setTimeout(() => window.close(), 300);
+  } else {
+    setTimeout(() => {
+      window.location.replace("/?oauth=success");
+    }, 300);
   }
+} catch (e) {
+  console.error(e);
+  setTimeout(() => {
+    window.location.replace("/?oauth=success");
+  }, 300);
+}
 </script>
         </body>
       </html>

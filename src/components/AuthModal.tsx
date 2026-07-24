@@ -14,33 +14,49 @@ export default function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps
 
   // Listen to message events for the Google OAuth popup callback
   useEffect(() => {
+    const completeLogin = (payload: any) => {
+      const { accessToken, refreshToken, user } = payload;
+
+      localStorage.setItem("iposense_access_token", accessToken);
+      localStorage.setItem("iposense_refresh_token", refreshToken);
+
+      const normalizedUser = {
+        ...user,
+        displayName: user.displayName || user.name || "",
+        name: user.name || user.displayName || "",
+        photoURL: user.photoURL || "",
+      };
+
+      localStorage.setItem("iposense_user", JSON.stringify(normalizedUser));
+      window.dispatchEvent(new Event("iposense_auth_changed"));
+
+      setSuccessMsg(`Welcome back, ${normalizedUser.name}! Connected via Google SSO.`);
+      setLoading(false);
+
+      setTimeout(() => {
+        onSuccess?.();
+        onClose();
+        window.location.reload();
+      }, 500);
+    };
+
     const handleOAuthMessage = (event: MessageEvent) => {
-      if (event.data && event.data.type === "OAUTH_AUTH_SUCCESS") {
-        const { accessToken, refreshToken, user } = event.data;
-
-        localStorage.setItem("iposense_access_token", accessToken);
-        localStorage.setItem("iposense_refresh_token", refreshToken);
-        const normalizedUser = {
-          ...user,
-          displayName: user.displayName || user.name || "",
-          name: user.name || user.displayName || "",
-          photoURL: user.photoURL || "",
-        };
-        localStorage.setItem("iposense_user", JSON.stringify(normalizedUser));
-
-        window.dispatchEvent(new Event("iposense_auth_changed"));
-
-        setSuccessMsg(`Welcome back, ${user.name}! Connected via Google SSO.`);
-        setLoading(false);
-
-        setTimeout(() => {
-          if (onSuccess) onSuccess();
-          onClose();
-        }, 1200);
+      if (event.origin !== window.location.origin) return;
+      if (event.data?.type === "OAUTH_AUTH_SUCCESS") {
+        completeLogin(event.data);
       }
     };
     window.addEventListener("message", handleOAuthMessage);
-    return () => window.removeEventListener("message", handleOAuthMessage);
+    const channel = new BroadcastChannel("iposense-auth");
+    channel.onmessage = (event) => {
+      if (event.data?.type === "OAUTH_AUTH_SUCCESS") {
+        completeLogin(event.data);
+      }
+    };
+    return () => {
+      window.removeEventListener("message", handleOAuthMessage);
+      channel.close();
+    };
   }, [onSuccess, onClose]);
 
   if (!isOpen) return null;
