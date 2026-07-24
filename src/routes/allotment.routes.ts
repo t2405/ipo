@@ -1,16 +1,16 @@
 import { Router, Request, Response } from "express";
-import { requireAuth, AuthRequest } from "../middleware/auth";
+import { requireAuth, AuthRequest } from "../middleware/auth.ts";
 
 const router = Router();
-import { db } from "../db";
-import { allotmentChecks } from "../db/schema";
+import { db } from "../db/index.ts";
+import { allotmentChecks } from "../db/schema.ts";
 import { eq, desc, and } from "drizzle-orm";
 import {
   getKfintechList,
   checkKfintechAllotment,
   getMufgList,
   checkMufgAllotment,
-} from "../controllers/allotment.controller";
+} from "../controllers/allotment.controller.ts";
 
 export const getAllotmentHistory = async (req: AuthRequest, res: Response) => {
   try {
