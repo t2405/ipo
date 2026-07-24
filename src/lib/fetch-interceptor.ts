@@ -5,8 +5,6 @@ declare global {
   }
 }
 
-import { auth } from "./firebase.js";
-
 const originalFetch = window.fetch;
 
 // Helper to check and refresh token
@@ -17,17 +15,25 @@ async function refreshAccessToken(): Promise<string | null> {
   try {
     const res = await originalFetch("/api/auth/refresh", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refreshToken })
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ refreshToken }),
     });
+
     if (res.ok) {
       const data = await res.json();
+
       if (data.accessToken) {
         localStorage.setItem("iposense_access_token", data.accessToken);
-        // Persist the rotated refresh token returned by the server
+
         if (data.refreshToken) {
-          localStorage.setItem("iposense_refresh_token", data.refreshToken);
+          localStorage.setItem(
+            "iposense_refresh_token",
+            data.refreshToken
+          );
         }
+
         return data.accessToken;
       }
     }
@@ -35,39 +41,61 @@ async function refreshAccessToken(): Promise<string | null> {
     console.error("Failed to refresh access token automatically:", err);
   }
 
-  // Clear session if refresh failed
+  // Refresh failed → clear session
   localStorage.removeItem("iposense_access_token");
   localStorage.removeItem("iposense_refresh_token");
   localStorage.removeItem("iposense_user");
+
   window.dispatchEvent(new Event("iposense_auth_changed"));
+
   return null;
 }
 
-async function customFetch(this: any, input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-  const url = typeof input === "string" ? input : (input instanceof URL ? input.toString() : input.url);
-  
-  let fetchInit = init ? { ...init } : {};
-  const isApiRequest = url.startsWith("/api") || 
-                       url.startsWith("http://localhost:3000/api") || 
-                       url.startsWith(window.location.origin + "/api");
+async function customFetch(
+  this: any,
+  input: RequestInfo | URL,
+  init?: RequestInit
+): Promise<Response> {
+  const url =
+    typeof input === "string"
+      ? input
+      : input instanceof URL
+      ? input.toString()
+      : input.url;
+
+  let fetchInit: RequestInit = init ? { ...init } : {};
+
+  const isApiRequest =
+    url.startsWith("/api") ||
+    url.startsWith("http://localhost:3000/api") ||
+    url.startsWith(window.location.origin + "/api");
 
   const method = (fetchInit.method || "GET").toUpperCase();
 
   if (isApiRequest) {
-    // 1. Transparent CSRF Token Auto-injection for modifying requests
-    const isWriteOperation = ["POST", "PUT", "DELETE", "PATCH"].includes(method);
+    // -----------------------------
+    // CSRF Auto Injection
+    // -----------------------------
+    const isWriteOperation = ["POST", "PUT", "PATCH", "DELETE"].includes(
+      method
+    );
+
     const isCsrfFetchRoute = url.includes("/api/auth/csrf-token");
 
     if (isWriteOperation && !isCsrfFetchRoute) {
       if (!window.csrfToken) {
         try {
           const csrfRes = await originalFetch("/api/auth/csrf-token");
+
           if (csrfRes.ok) {
             const csrfData = await csrfRes.json();
             window.csrfToken = csrfData.csrfToken;
           }
-        } catch (csrfErr) {
-          console.warn("[CSRF Interceptor] Failed retrieving CSRF token on demand:", csrfErr);
+        } catch (err) {
+          console.warn(
+            "[CSRF Interceptor] Failed retrieving CSRF token:",
+            err
+          );
         }
       }
 
@@ -78,24 +106,10 @@ async function customFetch(this: any, input: RequestInfo | URL, init?: RequestIn
       }
     }
 
-    // 2. JWT Access Token injection
-    let token: string | null = null;
-
-    // Check custom JWT first
-    const customToken = localStorage.getItem("iposense_access_token");
-    if (customToken) {
-      token = customToken;
-    } else {
-      // Fallback to Firebase
-      const currentUser = auth.currentUser;
-      if (currentUser) {
-        try {
-          token = await currentUser.getIdToken();
-        } catch (err) {
-          console.error("Failed to get Firebase ID token:", err);
-        }
-      }
-    }
+    // -----------------------------
+    // JWT Access Token Injection
+    // -----------------------------
+    const token = localStorage.getItem("iposense_access_token");
 
     if (token) {
       const headers = new Headers(fetchInit.headers || {});
@@ -103,26 +117,32 @@ async function customFetch(this: any, input: RequestInfo | URL, init?: RequestIn
       fetchInit.headers = headers;
     }
   }
-  
-  const response = await originalFetch.call(this, input, fetchInit);
 
-  // If unauthorized because of expired token, try silent refresh
+  let response = await originalFetch.call(this, input, fetchInit);
+
+  // -----------------------------
+  // Auto Refresh Expired Token
+  // -----------------------------
   if (response.status === 401 && isApiRequest) {
-    const responseClone = response.clone();
     try {
-      const body = await responseClone.json();
+      const clone = response.clone();
+      const body = await clone.json();
+
       if (body.error === "UNAUTHORIZED_EXPIRED") {
-        console.log("Access token expired. Requesting automatic token refresh...");
-        const newAccessToken = await refreshAccessToken();
-        if (newAccessToken) {
+        console.log("Access token expired. Refreshing...");
+
+        const newToken = await refreshAccessToken();
+
+        if (newToken) {
           const headers = new Headers(fetchInit.headers || {});
-          headers.set("Authorization", `Bearer ${newAccessToken}`);
+          headers.set("Authorization", `Bearer ${newToken}`);
           fetchInit.headers = headers;
-          return originalFetch.call(this, input, fetchInit);
+
+          response = await originalFetch.call(this, input, fetchInit);
         }
       }
-    } catch (_) {
-      // Safe fallback if response is not JSON
+    } catch {
+      // Ignore non-JSON responses
     }
   }
 
@@ -134,13 +154,17 @@ try {
     value: customFetch,
     writable: true,
     configurable: true,
-    enumerable: true
+    enumerable: true,
   });
 } catch (err) {
-  console.warn("Failed to define property 'fetch' on window. Attempting direct assignment...", err);
+  console.warn(
+    "Failed to override window.fetch. Trying direct assignment...",
+    err
+  );
+
   try {
     (window as any).fetch = customFetch;
   } catch (err2) {
-    console.error("Direct assignment to window.fetch also failed:", err2);
+    console.error("Failed to override fetch:", err2);
   }
 }

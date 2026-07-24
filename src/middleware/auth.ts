@@ -1,5 +1,4 @@
 import { Request, Response, NextFunction } from "express";
-import { adminAuth } from "../lib/firebase-admin.js";
 import { db } from "../db/index.js";
 import { users, userSettings, portfolioHoldings } from "../db/schema.js";
 import { eq } from "drizzle-orm";
@@ -159,85 +158,12 @@ export const requireAuth = async (
       });
     }
 
-    // Only try Firebase verification if the token looks like a Firebase ID token.
-    // Custom JWTs (three-part HS256 tokens issued by this backend) should not be
-    // passed to Firebase Admin.
-    const looksLikeFirebaseToken =
-      token.split(".").length === 3 &&
-      !token.includes("GOOGLE_UID_");
-
-    if (!looksLikeFirebaseToken) {
-      return res.status(401).json({
-        error: "Unauthorized: Invalid access token",
-      });
-    }
-  }
-
-  try {
-    const decodedToken = await adminAuth.verifyIdToken(token);
-    const email = decodedToken.email || `${decodedToken.uid}@firebase.com`;
-    
-    req.user = {
-      uid: decodedToken.uid,
-      email: email,
-    };
-
-    // Synchronize / Register user in Postgres users table
-    let dbUserRecord = await db.query.users.findFirst({
-      where: eq(users.uid, decodedToken.uid),
+    return res.status(401).json({
+      error: "Unauthorized: Invalid or expired access token",
     });
-
-    if (!dbUserRecord) {
-      try {
-        // Concurrency safe registration
-        const result = await db.insert(users)
-          .values({
-            uid: decodedToken.uid,
-            email: email,
-          })
-          .onConflictDoUpdate({
-            target: users.uid,
-            set: { email: email }
-          })
-          .returning();
-        
-        dbUserRecord = result[0];
-
-        // Also seed default user settings
-        await db.insert(userSettings)
-          .values({
-            userId: dbUserRecord.id,
-            gmpAlerts: true,
-            allotmentAlerts: true,
-            aiReports: true,
-            riskAppetite: "Moderate",
-          })
-          .onConflictDoNothing();
-      } catch (err) {
-        console.error("Failed to register user in Postgres:", err);
-        // Fallback retry
-        dbUserRecord = await db.query.users.findFirst({
-          where: eq(users.uid, decodedToken.uid),
-        });
-      }
-    }
-
-    if (dbUserRecord) {
-      console.log("[AUTH DEBUG] Firebase DB user found:", dbUserRecord.id, dbUserRecord.email);
-      req.dbUser = {
-        id: dbUserRecord.id,
-        uid: dbUserRecord.uid,
-        email: dbUserRecord.email,
-      };
-      // Inject role into request headers for RBAC
-      req.headers["x-user-role"] = dbUserRecord.role;
-    } else {
-      return res.status(500).json({ error: "Failed to establish database user context" });
-    }
-
-    next();
-  } catch (error: any) {
-    console.warn("Firebase token verification failed:", error?.message ?? error);
-    return res.status(401).json({ error: "Unauthorized: Invalid or expired token" });
   }
+
+  return res.status(401).json({
+    error: "Unauthorized: Invalid or expired access token",
+  });
 };
