@@ -1494,10 +1494,14 @@ app.get(["/auth/callback", "/auth/callback/"], async (req, res) => {
   if (!code) {
     return res.status(400).json({ error: "Missing Google authorization code" });
   }
-const callbackUrl =
-  process.env.APP_URL
-    ? `${process.env.APP_URL}/auth/callback`
-    : `${req.protocol}://${req.get("host")}/auth/callback`;
+  const callbackUrl =
+    process.env.APP_URL
+      ? `${process.env.APP_URL}/auth/callback`
+      : `${req.protocol}://${req.get("host")}/auth/callback`;
+
+  // Frontend ka actual origin — popup ka apna origin nahi.
+  // postMessage targetOrigin hamesha main frontend tab ka origin hona chahiye.
+  const frontendOrigin = process.env.FRONTEND_URL || "http://localhost:5173";
 
   try {
     // Exchange code for tokens
@@ -1578,6 +1582,8 @@ const callbackUrl =
       photoURL: targetPhoto
     });
 
+    const frontendOriginJson = JSON.stringify(frontendOrigin);
+
     return res.send(`
       <html>
         <head>
@@ -1607,35 +1613,36 @@ try {
   localStorage.setItem("iposense_refresh_token", authPayload.refreshToken);
   localStorage.setItem("iposense_user", JSON.stringify(authPayload.user));
 
-  // BroadcastChannel for cross-tab auth success notification
-  const channel = new BroadcastChannel("iposense-auth");
-  channel.postMessage({
-    type: "OAUTH_AUTH_SUCCESS",
-    ...authPayload,
-  });
-  channel.close();
+  const FRONTEND_ORIGIN = ${frontendOriginJson};
 
-  if (window.opener && !window.opener.closed) {
-    window.opener.localStorage.setItem("iposense_access_token", authPayload.accessToken);
-    window.opener.localStorage.setItem("iposense_refresh_token", authPayload.refreshToken);
-    window.opener.localStorage.setItem("iposense_user", JSON.stringify(authPayload.user));
+  try {
+    if (window.opener && !window.opener.closed) {
+      window.opener.postMessage({
+        type: "OAUTH_AUTH_SUCCESS",
+        ...authPayload,
+      }, FRONTEND_ORIGIN);
+    } else {
+      window.location.href = FRONTEND_ORIGIN + "/?oauth=success";
+    }
+  } catch (openerErr) {
+    console.warn("Opener postMessage failed:", openerErr);
+    window.location.href = FRONTEND_ORIGIN + "/?oauth=success";
+  }
 
-    window.opener.dispatchEvent(new StorageEvent("storage", {
-      key: "iposense_access_token",
-      newValue: authPayload.accessToken,
-    }));
-
-    window.opener.postMessage({
+  try {
+    const channel = new BroadcastChannel("iposense-auth");
+    channel.postMessage({
       type: "OAUTH_AUTH_SUCCESS",
       ...authPayload,
-    }, window.location.origin);
-
-    setTimeout(() => window.close(), 300);
-  } else {
-    setTimeout(() => {
-      window.location.replace("/?oauth=success");
-    }, 300);
+    });
+    channel.close();
+  } catch (bcErr) {
+    console.warn("BroadcastChannel unavailable:", bcErr);
   }
+
+  setTimeout(() => {
+    window.close();
+  }, 500);
 } catch (e) {
   console.error(e);
   setTimeout(() => {

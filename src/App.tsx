@@ -394,6 +394,35 @@ const symbols = normalizedHoldings
   };
 
   useEffect(() => {
+    const handleOAuthMessage = (event: MessageEvent) => {
+      const allowedOrigins = [
+        "http://localhost:3001",
+        "http://localhost:5173",
+        window.location.origin,
+      ];
+
+      if (!allowedOrigins.includes(event.origin)) return;
+
+      if (event.data?.type === "OAUTH_AUTH_SUCCESS") {
+        const payload = event.data;
+
+        if (payload.accessToken) {
+          localStorage.setItem("iposense_access_token", payload.accessToken);
+        }
+        if (payload.refreshToken) {
+          localStorage.setItem("iposense_refresh_token", payload.refreshToken);
+        }
+        if (payload.user) {
+          localStorage.setItem("iposense_user", JSON.stringify(payload.user));
+          setUser(payload.user);
+        }
+
+        setIsAuthModalOpen(false);
+        window.dispatchEvent(new Event("iposense_auth_changed"));
+      }
+    };
+
+    window.addEventListener("message", handleOAuthMessage);
     const handleAuthChange = () => {
       try {
         const saved = localStorage.getItem("iposense_user");
@@ -426,6 +455,7 @@ const symbols = normalizedHoldings
 
     return () => {
       window.removeEventListener("iposense_auth_changed", handleAuthChange);
+      window.removeEventListener("message", handleOAuthMessage);
     };
   }, []);
 
