@@ -1,5 +1,5 @@
 import { XMLParser } from "fast-xml-parser";
-import { redisCache } from "../utils/cache.helper.ts";
+import { redisCache } from "../utils/cache.helper";
 
 interface MufgIpoItem {
   companyId: string;

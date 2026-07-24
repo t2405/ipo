@@ -1,5 +1,5 @@
 import { chromium } from "playwright";
-import { redisCache } from "../utils/cache.helper.ts";
+import { redisCache } from "../utils/cache.helper";
 
 interface KfintechIpoItem {
   clientId: string;

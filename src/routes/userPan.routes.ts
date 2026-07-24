@@ -1,9 +1,9 @@
 import express from "express";
-import { requireAuth } from "../middleware/auth.ts";
+import { requireAuth } from "../middleware/auth";
 import {
   getUserPan,
   saveUserPan,
-} from "../controllers/userPan.controller.ts";
+} from "../controllers/userPan.controller";
 
 const router = express.Router();
 

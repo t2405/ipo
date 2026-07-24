@@ -1,5 +1,5 @@
-import { db as postgresDb } from "../db/index.ts";
-import { userPans } from "../db/schema.ts";
+import { db as postgresDb } from "../db/index";
+import { userPans } from "../db/schema";
 import { eq } from "drizzle-orm";
 
 export async function getUserPanByUserId(userId: number): Promise<string | null> {

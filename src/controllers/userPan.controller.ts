@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
-import { getUserPanByUserId, upsertUserPan } from "../services/userPan.service.ts";
-import { AuthRequest } from "../middleware/auth.ts";
+import { getUserPanByUserId, upsertUserPan } from "../services/userPan.service";
+import { AuthRequest } from "../middleware/auth";
 
 export async function getUserPan(req: AuthRequest, res: Response) {
   try {

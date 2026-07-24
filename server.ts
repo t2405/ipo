@@ -5,13 +5,13 @@ import { pathToFileURL } from "node:url";
 import Groq from "groq-sdk";
 import { createClient } from "redis";
 import axios from "axios";
-import marketRoutes from "./src/routes/market.ts";
+import marketRoutes from "./src/routes/market";
 import * as cheerio from "cheerio";
 import jwt from "jsonwebtoken";
 import { PDFParse } from "pdf-parse";
 
 // Import PostgreSQL Database & authentication middleware
-import { db as postgresDb } from "./src/db/index.ts";
+import { db as postgresDb } from "./src/db/index";
 import { 
   users as dbUsers, 
   watchlist as dbWatchlist, 
@@ -25,11 +25,11 @@ import {
   marketData as dbMarketData,
   auditLogs as dbAuditLogs,
   apiUsageLogs as dbApiUsageLogs
-} from "./src/db/schema.ts";
-import { requireAuth, AuthRequest } from "./src/middleware/auth.ts";
+} from "./src/db/schema";
+import { requireAuth, AuthRequest } from "./src/middleware/auth";
 import { eq, and } from "drizzle-orm";
-import allotmentRoutes from "./src/routes/allotment.routes.ts";
-import userPanRoutes from "./src/routes/userPan.routes.ts";
+import allotmentRoutes from "./src/routes/allotment.routes";
+import userPanRoutes from "./src/routes/userPan.routes";
 import {
   secretsManager,
   customRateLimiter,
@@ -42,7 +42,7 @@ import {
   rateLimitLogs,
   activeCsrfTokens,
   revokedRefreshTokens
-} from "./src/middleware/security.ts";
+} from "./src/middleware/security";
 
 
 

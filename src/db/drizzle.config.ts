@@ -12,7 +12,7 @@ if (!databaseUrl) {
 
 
 export default defineConfig({
-  schema: "./src/db/schema.ts",
+  schema: "./src/db/schema",
   out: "./drizzle", // Output directory for migrations.
   dialect: "postgresql",
   schemaFilter: ["public"],
