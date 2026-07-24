@@ -1,6 +1,9 @@
 import { initializeApp, getApps } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
-import firebaseConfig from "../../firebase-applet-config.json" with { type: "json" };
+
+const firebaseConfig = {
+  projectId: process.env.FIREBASE_PROJECT_ID || "modern-dragon-st3g1",
+};
 
 if (!getApps().length) {
   initializeApp({
