@@ -16,8 +16,6 @@ import OnboardingTour from "./components/OnboardingTour";
 import AuthModal from "./components/AuthModal";
 import AdminCenter from "./components/AdminCenter";
 import ResearchHub from "./components/ResearchHub";
-import { auth } from "./lib/firebase";
-import { onAuthStateChanged, signOut } from "firebase/auth";
 import { IPO, Application, PortfolioHolding } from "./types";
 import { Sparkles, Calendar, RefreshCw, Sun, Moon } from "lucide-react";
 
@@ -390,7 +388,6 @@ const symbols = normalizedHoldings
     localStorage.removeItem("iposense_access_token");
     localStorage.removeItem("iposense_refresh_token");
     localStorage.removeItem("iposense_user");
-    await signOut(auth);
     setUser(null);
     setActiveTab("dashboard");
     window.dispatchEvent(new Event("iposense_auth_changed"));
@@ -412,14 +409,7 @@ const symbols = normalizedHoldings
 
     window.addEventListener("iposense_auth_changed", handleAuthChange);
 
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      const customSaved = localStorage.getItem("iposense_user");
-      // Only use Firebase user state if there is no custom JWT user session
-      if (!customSaved) {
-        setUser(currentUser);
-      }
-      
-      // When auth state shifts, load corresponding Postgres records
+    (async () => {
       setLoading(true);
       try {
         await Promise.all([
@@ -429,16 +419,13 @@ const symbols = normalizedHoldings
           fetchWatchlist(),
           fetchNews(),
         ]);
-      } catch (err) {
-        console.error("Failed loading authenticated user context records:", err);
       } finally {
         setLoading(false);
       }
-    });
+    })();
 
     return () => {
       window.removeEventListener("iposense_auth_changed", handleAuthChange);
-      unsubscribe();
     };
   }, []);
 
